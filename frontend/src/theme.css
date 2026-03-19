@@ -1,0 +1,25 @@
+/* Obsidian-like dark shell; editor #171717, sidebar #1e1e1e. */
+
+:root {
+  --obs-bg-editor: #171717;
+  --obs-bg-sidebar: #1e1e1e;
+  --obs-bg-tab-active: #252525;
+  --obs-bg-tab-bar: #1a1a1a;
+  --obs-text: #ffffff;
+  --obs-text-muted: #b0b0b0;
+  --obs-selection: #2a2a2a;
+  --obs-border: #333333;
+  --obs-icon-dim: #777777;
+
+  --bs-body-bg: var(--obs-bg-editor);
+  --bs-body-color: var(--obs-text-muted);
+  --bs-secondary-color: var(--obs-text-muted);
+  --bs-border-color: var(--obs-border);
+  --bs-link-color: var(--obs-text-muted);
+  --bs-link-hover-color: var(--obs-text);
+}
+
+body {
+  background-color: var(--obs-bg-editor);
+  color: var(--obs-text-muted);
+}
