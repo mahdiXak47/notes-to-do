@@ -296,7 +296,7 @@ function TreeRows({ nodes, depth, activeFileId, dispatch, expandedOverrides }) {
   return rows
 }
 
-function App() {
+function App({ onLogout = () => {}, username = '' }) {
   const [state, dispatch] = useReducer(reducer, initialState)
 
   const displayTree = useMemo(() => {
@@ -404,6 +404,18 @@ function App() {
               dispatch={dispatch}
               expandedOverrides={Boolean(state.searchQuery.trim())}
             />
+          </div>
+          <div className="sidebar-footer">
+            <div className="sidebar-footer-user text-truncate" title={username}>
+              {username}
+            </div>
+            <button
+              type="button"
+              className="sidebar-footer-logout"
+              onClick={onLogout}
+            >
+              Sign out
+            </button>
           </div>
         </aside>
 
