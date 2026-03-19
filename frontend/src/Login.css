@@ -1,0 +1,51 @@
+.login-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  background-color: var(--obs-bg-editor);
+}
+
+.login-card {
+  width: 100%;
+  max-width: 380px;
+  background-color: var(--obs-bg-sidebar);
+  color: var(--obs-text);
+}
+
+.login-title {
+  color: var(--obs-text);
+  font-weight: 600;
+}
+
+.login-subtitle {
+  color: var(--obs-text-muted);
+}
+
+.login-card .form-label {
+  color: var(--obs-text-muted);
+}
+
+.form-control-dark {
+  background-color: var(--obs-bg-editor);
+  border-color: var(--obs-border);
+  color: var(--obs-text);
+}
+
+.form-control-dark:focus {
+  background-color: var(--obs-bg-editor);
+  border-color: var(--obs-icon-dim);
+  color: var(--obs-text);
+  box-shadow: none;
+}
+
+.form-control-dark::placeholder {
+  color: var(--obs-icon-dim);
+}
+
+.auth-loading {
+  background-color: var(--obs-bg-editor);
+  color: var(--obs-text-muted);
+  font-size: 0.875rem;
+}
