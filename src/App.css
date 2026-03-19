@@ -169,6 +169,11 @@
   font: inherit;
 }
 
+.tab-item .tab-select {
+  min-width: 0;
+  font: inherit;
+}
+
 .tab-item:hover {
   color: var(--obs-text);
   background-color: rgba(255, 255, 255, 0.04);
