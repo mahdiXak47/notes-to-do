@@ -1,53 +1,30 @@
-import { useEffect, useMemo, useReducer, useState } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useReducer,
+  useRef,
+  useState,
+} from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import './App.css'
+import {
+  collectExpandedByFolderId,
+  createFolder,
+  createNote,
+  deleteFolder,
+  deleteNote,
+  fetchVaultTree,
+  folderPkFromClientId,
+  normalizeTreeFromApi,
+  notePkFromClientId,
+  patchNoteBody,
+  patchNoteName,
+  pruneStateForVaultTree,
+} from './vaultApi.js'
 
 const SKIP_DELETE_CONFIRM_KEY = 'notes_skip_delete_confirm'
-
-function createId() {
-  return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
-}
-
-const initialVault = [
-  {
-    id: 'folder-jange',
-    type: 'folder',
-    name: 'jange esfand',
-    expanded: true,
-    children: [
-      {
-        id: 'file-movies',
-        type: 'file',
-        name: 'movies',
-        meta: null,
-        content: '# Movies\n\n- [ ] Pick a film\n- [ ] Watch\n',
-      },
-      {
-        id: 'file-image',
-        type: 'file',
-        name: 'image',
-        meta: 'PNG',
-        content: '',
-      },
-    ],
-  },
-  {
-    id: 'folder-lpic',
-    type: 'folder',
-    name: 'LPIC TASKs',
-    expanded: true,
-    children: [
-      {
-        id: 'file-base',
-        type: 'file',
-        name: 'BASE',
-        meta: 'BASE',
-        content: '```bash\necho hello\n```\n',
-      },
-    ],
-  },
-]
 
 function sortTree(nodes, enabled) {
   if (!enabled) return nodes
@@ -92,6 +69,24 @@ function findFile(nodes, fileId) {
     }
   }
   return null
+}
+
+function flattenVaultFiles(nodes, prefix = []) {
+  const out = []
+  for (const n of nodes) {
+    if (n.type === 'folder') {
+      out.push(...flattenVaultFiles(n.children, [...prefix, n.name]))
+    } else {
+      const pathLabel = prefix.length ? `${prefix.join('/')}/${n.name}` : n.name
+      out.push({ id: n.id, name: n.name, pathLabel })
+    }
+  }
+  return out
+}
+
+function modKeyLabel() {
+  if (typeof navigator === 'undefined') return 'Ctrl'
+  return /Mac|iPhone|iPod/i.test(navigator.platform || '') ? '⌘' : 'Ctrl'
 }
 
 function findBreadcrumb(nodes, fileId, acc = []) {
@@ -178,36 +173,6 @@ function stripPinnedFilesFromNodes(nodes, pinnedIds) {
   return out
 }
 
-function collectFileIdsUnderNodes(list) {
-  let ids = []
-  for (const n of list) {
-    if (n.type === 'file') ids.push(n.id)
-    else ids = ids.concat(collectFileIdsUnderNodes(n.children))
-  }
-  return ids
-}
-
-function findFolderById(nodes, folderId) {
-  for (const n of nodes) {
-    if (n.type === 'folder' && n.id === folderId) return n
-    if (n.type === 'folder') {
-      const f = findFolderById(n.children, folderId)
-      if (f) return f
-    }
-  }
-  return null
-}
-
-function removeNodeById(nodes, targetId) {
-  return nodes
-    .filter((n) => n.id !== targetId)
-    .map((n) =>
-      n.type === 'folder'
-        ? { ...n, children: removeNodeById(n.children, targetId) }
-        : n,
-    )
-}
-
 function toggleFolder(nodes, folderId) {
   return nodes.map((n) => {
     if (n.type === 'folder') {
@@ -228,6 +193,16 @@ function setFileContent(nodes, fileId, content) {
   })
 }
 
+function renameFileInTree(nodes, fileId, name) {
+  return nodes.map((n) => {
+    if (n.type === 'folder') {
+      return { ...n, children: renameFileInTree(n.children, fileId, name) }
+    }
+    if (n.id === fileId) return { ...n, name }
+    return n
+  })
+}
+
 function collapseAll(nodes) {
   return nodes.map((n) => {
     if (n.type === 'folder') {
@@ -237,15 +212,11 @@ function collapseAll(nodes) {
   })
 }
 
-function addNodeToRoot(nodes, node) {
-  return [node, ...nodes]
-}
-
 const initialState = {
-  vault: initialVault,
-  openTabs: ['file-movies'],
-  activeFileId: 'file-movies',
-  nav: { ids: ['file-movies'], i: 0 },
+  vault: [],
+  openTabs: [],
+  activeFileId: null,
+  nav: { ids: [], i: 0 },
   searchQuery: '',
   sortAZ: false,
   pinnedIds: {},
@@ -253,6 +224,14 @@ const initialState = {
 
 function reducer(state, action) {
   switch (action.type) {
+    case 'SET_VAULT': {
+      const pruned = pruneStateForVaultTree(state, action.vault)
+      return {
+        ...state,
+        vault: action.vault,
+        ...pruned,
+      }
+    }
     case 'OPEN_FILE': {
       const { id } = action
       const openTabs = state.openTabs.includes(id)
@@ -304,125 +283,23 @@ function reducer(state, action) {
         ...state,
         vault: setFileContent(state.vault, action.fileId, action.content),
       }
+    case 'RENAME_NOTE':
+      return {
+        ...state,
+        vault: renameFileInTree(state.vault, action.fileId, action.name),
+      }
     case 'COLLAPSE_ALL':
       return { ...state, vault: collapseAll(state.vault) }
     case 'TOGGLE_SORT':
       return { ...state, sortAZ: !state.sortAZ }
     case 'SET_SEARCH':
       return { ...state, searchQuery: action.value }
-    case 'NEW_NOTE': {
-      const nid = createId()
-      const file = {
-        id: nid,
-        type: 'file',
-        name: 'Untitled',
-        meta: null,
-        content: '',
-      }
-      const vault = addNodeToRoot(state.vault, file)
-      const openTabs = state.openTabs.includes(nid)
-        ? state.openTabs
-        : [...state.openTabs, nid]
-      const base = state.nav.ids.slice(0, state.nav.i + 1)
-      const nav = { ids: [...base, nid], i: base.length }
-      return {
-        ...state,
-        vault,
-        openTabs,
-        activeFileId: nid,
-        nav,
-      }
-    }
-    case 'NEW_FOLDER': {
-      const fid = createId()
-      const folder = {
-        id: fid,
-        type: 'folder',
-        name: 'New folder',
-        expanded: true,
-        children: [],
-      }
-      return { ...state, vault: addNodeToRoot(state.vault, folder) }
-    }
     case 'TOGGLE_PIN': {
       const { id } = action
       const next = { ...state.pinnedIds }
       if (next[id]) delete next[id]
       else next[id] = true
       return { ...state, pinnedIds: next }
-    }
-    case 'DELETE_FILE': {
-      const { id } = action
-      const vault = removeNodeById(state.vault, id)
-      const openTabs = state.openTabs.filter((t) => t !== id)
-      let activeFileId = state.activeFileId
-      if (activeFileId === id) {
-        const idx = state.openTabs.indexOf(id)
-        activeFileId =
-          openTabs[idx - 1] ?? openTabs[idx] ?? openTabs[0] ?? null
-      }
-      const pinnedIds = { ...state.pinnedIds }
-      delete pinnedIds[id]
-      const navIds = state.nav.ids.filter((x) => x !== id)
-      let navI = state.nav.i
-      if (!navIds.length) {
-        return {
-          ...state,
-          vault,
-          openTabs,
-          activeFileId,
-          pinnedIds,
-          nav: { ids: [], i: 0 },
-        }
-      }
-      if (navI >= navIds.length) navI = navIds.length - 1
-      return {
-        ...state,
-        vault,
-        openTabs,
-        activeFileId,
-        pinnedIds,
-        nav: { ids: navIds, i: navI },
-      }
-    }
-    case 'DELETE_FOLDER': {
-      const { id } = action
-      const folder = findFolderById(state.vault, id)
-      const removedFileIds = folder
-        ? collectFileIdsUnderNodes(folder.children)
-        : []
-      const vault = removeNodeById(state.vault, id)
-      const removeSet = new Set([id, ...removedFileIds])
-      const openTabs = state.openTabs.filter((t) => !removeSet.has(t))
-      let activeFileId = state.activeFileId
-      if (activeFileId && removeSet.has(activeFileId)) {
-        const idx = state.openTabs.indexOf(activeFileId)
-        activeFileId =
-          openTabs[idx - 1] ?? openTabs[idx] ?? openTabs[0] ?? null
-      }
-      const pinnedIds = { ...state.pinnedIds }
-      for (const pid of removeSet) delete pinnedIds[pid]
-      const navIds = state.nav.ids.filter((x) => !removeSet.has(x))
-      let navI = state.nav.i
-      if (!navIds.length) {
-        return {
-          ...state,
-          vault,
-          openTabs,
-          activeFileId,
-          pinnedIds,
-          nav: { ids: [], i: 0 },
-        }
-      }
-      if (navI >= navIds.length) navI = navIds.length - 1
-      return {
-        ...state,
-        vault,
-        openTabs,
-        activeFileId,
-        pinnedIds,
-        nav: { ids: navIds, i: navI },
-      }
     }
     default:
       return state
@@ -610,6 +487,57 @@ function App({ onLogout = () => {}, username = '' }) {
   const [deleteModal, setDeleteModal] = useState(null)
   const [deleteModalDontAskAgain, setDeleteModalDontAskAgain] = useState(false)
   const [pinnedSectionOpen, setPinnedSectionOpen] = useState(true)
+  const [vaultLoading, setVaultLoading] = useState(true)
+  const [vaultError, setVaultError] = useState(null)
+  const [quickOpenOpen, setQuickOpenOpen] = useState(false)
+  const [quickOpenQuery, setQuickOpenQuery] = useState('')
+  const [quickOpenIndex, setQuickOpenIndex] = useState(0)
+  const quickOpenInputRef = useRef(null)
+  const [titleEditing, setTitleEditing] = useState(false)
+  const [titleDraft, setTitleDraft] = useState('')
+  const titleInputRef = useRef(null)
+  const vaultRef = useRef([])
+  vaultRef.current = state.vault
+  const lastSavedBodyRef = useRef({})
+  const prevActiveFileIdRef = useRef(null)
+  const modLabel = useMemo(() => modKeyLabel(), [])
+
+  const syncVaultFromServer = useCallback(async () => {
+    const expanded = collectExpandedByFolderId(vaultRef.current)
+    const raw = await fetchVaultTree()
+    dispatch({
+      type: 'SET_VAULT',
+      vault: normalizeTreeFromApi(raw, expanded),
+    })
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      setVaultLoading(true)
+      setVaultError(null)
+      try {
+        const raw = await fetchVaultTree()
+        if (cancelled) return
+        const expanded = collectExpandedByFolderId(vaultRef.current)
+        dispatch({
+          type: 'SET_VAULT',
+          vault: normalizeTreeFromApi(raw, expanded),
+        })
+      } catch (e) {
+        if (!cancelled) {
+          setVaultError(
+            e instanceof Error ? e.message : 'Failed to load vault.',
+          )
+        }
+      } finally {
+        if (!cancelled) setVaultLoading(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   function openDeleteModal(target) {
     setDeleteModalDontAskAgain(false)
@@ -635,7 +563,19 @@ function App({ onLogout = () => {}, username = '' }) {
     }
   }, [deleteModal])
 
-  function confirmDelete() {
+  async function runDelete(target) {
+    setVaultError(null)
+    if (target.kind === 'folder') {
+      const pk = folderPkFromClientId(target.id)
+      if (pk != null) await deleteFolder(pk)
+    } else {
+      const pk = notePkFromClientId(target.id)
+      if (pk != null) await deleteNote(pk)
+    }
+    await syncVaultFromServer()
+  }
+
+  async function confirmDelete() {
     if (!deleteModal) return
     if (deleteModalDontAskAgain) {
       try {
@@ -644,28 +584,50 @@ function App({ onLogout = () => {}, username = '' }) {
         /* ignore quota / private mode. */
       }
     }
-    if (deleteModal.kind === 'folder') {
-      dispatch({ type: 'DELETE_FOLDER', id: deleteModal.id })
-    } else {
-      dispatch({ type: 'DELETE_FILE', id: deleteModal.id })
-    }
+    const target = deleteModal
     closeDeleteModal()
+    try {
+      await runDelete(target)
+    } catch (e) {
+      setVaultError(e instanceof Error ? e.message : 'Delete failed.')
+    }
   }
 
   function handleDeleteRequest(target) {
     try {
       if (localStorage.getItem(SKIP_DELETE_CONFIRM_KEY) === '1') {
-        if (target.kind === 'folder') {
-          dispatch({ type: 'DELETE_FOLDER', id: target.id })
-        } else {
-          dispatch({ type: 'DELETE_FILE', id: target.id })
-        }
+        void runDelete(target).catch((e) => {
+          setVaultError(e instanceof Error ? e.message : 'Delete failed.')
+        })
         return
       }
     } catch {
       /* fall through to modal. */
     }
     openDeleteModal(target)
+  }
+
+  const handleNewNote = useCallback(async () => {
+    try {
+      setVaultError(null)
+      const created = await createNote(null, 'Untitled', vaultRef.current)
+      await syncVaultFromServer()
+      dispatch({ type: 'OPEN_FILE', id: `n-${created.id}` })
+    } catch (e) {
+      setVaultError(e instanceof Error ? e.message : 'Could not create note.')
+    }
+  }, [syncVaultFromServer])
+
+  async function handleNewFolder() {
+    try {
+      setVaultError(null)
+      await createFolder(null, 'New folder', vaultRef.current)
+      await syncVaultFromServer()
+    } catch (e) {
+      setVaultError(
+        e instanceof Error ? e.message : 'Could not create folder.',
+      )
+    }
   }
 
   const displayTree = useMemo(() => {
@@ -683,9 +645,234 @@ function App({ onLogout = () => {}, username = '' }) {
     [displayTree, state.pinnedIds],
   )
 
+  const flatVaultFiles = useMemo(
+    () => flattenVaultFiles(state.vault),
+    [state.vault],
+  )
+
+  const quickOpenMatches = useMemo(() => {
+    const q = quickOpenQuery.trim().toLowerCase()
+    if (!q) return flatVaultFiles
+    return flatVaultFiles.filter((row) =>
+      row.pathLabel.toLowerCase().includes(q),
+    )
+  }, [flatVaultFiles, quickOpenQuery])
+
+  const canCloseEditorTab = Boolean(
+    state.activeFileId || state.openTabs.length > 0,
+  )
+
+  const closeEditorTab = useCallback(() => {
+    if (state.activeFileId) {
+      dispatch({ type: 'CLOSE_TAB', id: state.activeFileId })
+      return
+    }
+    if (state.openTabs.length > 0) {
+      dispatch({
+        type: 'CLOSE_TAB',
+        id: state.openTabs[state.openTabs.length - 1],
+      })
+    }
+  }, [state.activeFileId, state.openTabs])
+
+  useEffect(() => {
+    setQuickOpenIndex((i) =>
+      quickOpenMatches.length === 0
+        ? 0
+        : Math.min(i, quickOpenMatches.length - 1),
+    )
+  }, [quickOpenMatches])
+
+  useEffect(() => {
+    if (!quickOpenOpen) return undefined
+    setQuickOpenQuery('')
+    setQuickOpenIndex(0)
+    const raf = window.requestAnimationFrame(() => {
+      quickOpenInputRef.current?.focus()
+    })
+    return () => window.cancelAnimationFrame(raf)
+  }, [quickOpenOpen])
+
+  useEffect(() => {
+    function onKeyDown(e) {
+      if (deleteModal) return
+
+      if (quickOpenOpen) {
+        if (e.key === 'Escape') {
+          e.preventDefault()
+          setQuickOpenOpen(false)
+          return
+        }
+        if (e.key === 'ArrowDown') {
+          e.preventDefault()
+          setQuickOpenIndex((i) =>
+            Math.min(i + 1, Math.max(0, quickOpenMatches.length - 1)),
+          )
+          return
+        }
+        if (e.key === 'ArrowUp') {
+          e.preventDefault()
+          setQuickOpenIndex((i) => Math.max(i - 1, 0))
+          return
+        }
+        if (e.key === 'Enter' && quickOpenMatches.length > 0) {
+          e.preventDefault()
+          const row = quickOpenMatches[quickOpenIndex]
+          if (row) {
+            dispatch({ type: 'OPEN_FILE', id: row.id })
+            setQuickOpenOpen(false)
+          }
+          return
+        }
+        if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'o') {
+          e.preventDefault()
+          setQuickOpenOpen(false)
+          return
+        }
+        if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'w') {
+          e.preventDefault()
+          setQuickOpenOpen(false)
+          return
+        }
+      }
+
+      const mod = e.metaKey || e.ctrlKey
+      if (!mod) return
+      const k = e.key.toLowerCase()
+      if (k === 'n') {
+        e.preventDefault()
+        if (quickOpenOpen) setQuickOpenOpen(false)
+        void handleNewNote()
+        return
+      }
+      if (k === 'o') {
+        e.preventDefault()
+        setQuickOpenOpen((open) => !open)
+        return
+      }
+      if (k === 'w') {
+        e.preventDefault()
+        if (quickOpenOpen) {
+          setQuickOpenOpen(false)
+          return
+        }
+        closeEditorTab()
+        return
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [
+    deleteModal,
+    quickOpenOpen,
+    quickOpenMatches,
+    quickOpenIndex,
+    handleNewNote,
+    closeEditorTab,
+  ])
+
   const activeFile = state.activeFileId
     ? findFile(state.vault, state.activeFileId)
     : null
+
+  useEffect(() => {
+    setTitleEditing(false)
+    setTitleDraft('')
+  }, [state.activeFileId])
+
+  useEffect(() => {
+    if (!titleEditing) return undefined
+    const raf = window.requestAnimationFrame(() => {
+      const el = titleInputRef.current
+      if (el) {
+        el.focus()
+        el.select()
+      }
+    })
+    return () => window.cancelAnimationFrame(raf)
+  }, [titleEditing])
+
+  const commitNoteTitleEdit = useCallback(async () => {
+    if (!activeFile) {
+      setTitleEditing(false)
+      return
+    }
+    const trimmed = titleDraft.trim()
+    if (!trimmed) {
+      setTitleDraft(activeFile.name)
+      setTitleEditing(false)
+      return
+    }
+    if (trimmed === activeFile.name) {
+      setTitleEditing(false)
+      return
+    }
+    const pk = notePkFromClientId(activeFile.id)
+    if (pk == null) {
+      setTitleEditing(false)
+      return
+    }
+    try {
+      setVaultError(null)
+      await patchNoteName(pk, trimmed)
+      dispatch({ type: 'RENAME_NOTE', fileId: activeFile.id, name: trimmed })
+      setTitleEditing(false)
+    } catch (e) {
+      setVaultError(e instanceof Error ? e.message : 'Could not rename note.')
+      setTitleDraft(activeFile.name)
+      setTitleEditing(false)
+    }
+  }, [activeFile, titleDraft, dispatch])
+
+  useEffect(() => {
+    if (state.activeFileId === prevActiveFileIdRef.current) return
+    prevActiveFileIdRef.current = state.activeFileId
+    const fid = state.activeFileId
+    if (!fid || !String(fid).startsWith('n-')) return
+    const f = findFile(state.vault, fid)
+    if (f) lastSavedBodyRef.current[fid] = f.content
+  }, [state.activeFileId, state.vault])
+
+  useEffect(() => {
+    const fileId = state.activeFileId
+    if (!fileId || !String(fileId).startsWith('n-')) return undefined
+    const pk = notePkFromClientId(fileId)
+    if (pk == null) return undefined
+    const savedRef = lastSavedBodyRef
+    const t = setTimeout(() => {
+      const file = findFile(vaultRef.current, fileId)
+      if (!file || file.type !== 'file') return
+      if (savedRef.current[fileId] === file.content) return
+      void patchNoteBody(pk, file.content)
+        .then(() => {
+          savedRef.current[fileId] = file.content
+        })
+        .catch((e) => {
+          setVaultError(
+            e instanceof Error ? e.message : 'Failed to save note.',
+          )
+        })
+    }, 600)
+    return () => {
+      clearTimeout(t)
+      const file = findFile(vaultRef.current, fileId)
+      if (
+        file &&
+        file.type === 'file' &&
+        savedRef.current[fileId] !== file.content
+      ) {
+        void patchNoteBody(pk, file.content)
+          .then(() => {
+            savedRef.current[fileId] = file.content
+          })
+          .catch((e) => {
+            setVaultError(
+              e instanceof Error ? e.message : 'Failed to save note.',
+            )
+          })
+      }
+    }
+  }, [state.activeFileId, activeFile?.content])
 
   const breadcrumb = useMemo(() => {
     if (!state.activeFileId) return null
@@ -731,7 +918,8 @@ function App({ onLogout = () => {}, username = '' }) {
               className="btn-icon"
               title="New note"
               aria-label="New note"
-              onClick={() => dispatch({ type: 'NEW_NOTE' })}
+              disabled={vaultLoading}
+              onClick={() => void handleNewNote()}
             >
               <i className="bi bi-file-earmark-plus" aria-hidden />
             </button>
@@ -740,7 +928,8 @@ function App({ onLogout = () => {}, username = '' }) {
               className="btn-icon"
               title="New folder"
               aria-label="New folder"
-              onClick={() => dispatch({ type: 'NEW_FOLDER' })}
+              disabled={vaultLoading}
+              onClick={() => void handleNewFolder()}
             >
               <i className="bi bi-folder-plus" aria-hidden />
             </button>
@@ -758,11 +947,20 @@ function App({ onLogout = () => {}, username = '' }) {
               className="btn-icon"
               title="Collapse all"
               aria-label="Collapse all folders"
+              disabled={vaultLoading}
               onClick={() => dispatch({ type: 'COLLAPSE_ALL' })}
             >
               <i className="bi bi-arrows-collapse" aria-hidden />
             </button>
           </div>
+          {vaultError ? (
+            <div
+              className="px-2 pb-2 small text-danger text-break"
+              role="alert"
+            >
+              {vaultError}
+            </div>
+          ) : null}
           <div className="sidebar-search">
             <input
               type="search"
@@ -776,7 +974,10 @@ function App({ onLogout = () => {}, username = '' }) {
             />
           </div>
           <div className="sidebar-tree">
-            {pinnedFileNodes.length > 0 ? (
+            {vaultLoading ? (
+              <div className="p-3 text-muted small">Loading vault…</div>
+            ) : null}
+            {!vaultLoading && pinnedFileNodes.length > 0 ? (
               <div className="sidebar-pinned-block">
                 <div className="sidebar-pinned-header-row">
                   <div className="tree-row-wrap sidebar-pinned-folder-wrap">
@@ -814,16 +1015,18 @@ function App({ onLogout = () => {}, username = '' }) {
                   : null}
               </div>
             ) : null}
-            <TreeRows
-              nodes={mainTreeNodes}
-              depth={0}
-              activeFileId={state.activeFileId}
-              dispatch={dispatch}
-              expandedOverrides={Boolean(state.searchQuery.trim())}
-              vault={state.vault}
-              pinnedIds={state.pinnedIds}
-              onRequestDelete={handleDeleteRequest}
-            />
+            {!vaultLoading ? (
+              <TreeRows
+                nodes={mainTreeNodes}
+                depth={0}
+                activeFileId={state.activeFileId}
+                dispatch={dispatch}
+                expandedOverrides={Boolean(state.searchQuery.trim())}
+                vault={state.vault}
+                pinnedIds={state.pinnedIds}
+                onRequestDelete={handleDeleteRequest}
+              />
+            ) : null}
           </div>
           <div className="sidebar-footer">
             <div className="sidebar-footer-user text-truncate" title={username}>
@@ -876,7 +1079,8 @@ function App({ onLogout = () => {}, username = '' }) {
               className="tab-new"
               title="New note"
               aria-label="New note"
-              onClick={() => dispatch({ type: 'NEW_NOTE' })}
+              disabled={vaultLoading}
+              onClick={() => void handleNewNote()}
             >
               +
             </button>
@@ -919,7 +1123,52 @@ function App({ onLogout = () => {}, username = '' }) {
 
           {activeFile ? (
             <div className="editor-main">
-              <h1 className="note-title">{activeFile.name}</h1>
+              {titleEditing ? (
+                <input
+                  ref={titleInputRef}
+                  type="text"
+                  className="note-title-input"
+                  value={titleDraft}
+                  onChange={(e) => setTitleDraft(e.target.value)}
+                  onBlur={() => void commitNoteTitleEdit()}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault()
+                      void commitNoteTitleEdit()
+                    }
+                    if (e.key === 'Escape') {
+                      e.preventDefault()
+                      setTitleDraft(activeFile.name)
+                      setTitleEditing(false)
+                    }
+                  }}
+                  aria-label="Note title"
+                  maxLength={255}
+                />
+              ) : (
+                <h1
+                  className="note-title note-title--clickable"
+                  onClick={() => {
+                    if (vaultLoading) return
+                    setTitleDraft(activeFile.name)
+                    setTitleEditing(true)
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      if (!vaultLoading) {
+                        setTitleDraft(activeFile.name)
+                        setTitleEditing(true)
+                      }
+                    }
+                  }}
+                  role="button"
+                  tabIndex={0}
+                  title="Click to rename"
+                >
+                  {activeFile.name}
+                </h1>
+              )}
               <div className="editor-split">
                 <div className="editor-split-pane editor-split-source">
                   <textarea
@@ -956,12 +1205,106 @@ function App({ onLogout = () => {}, username = '' }) {
               </div>
             </div>
           ) : (
-            <div className="editor-empty">
-              Open a note from the sidebar or create one with +.
+            <div className="editor-empty" role="region" aria-label="No file open">
+              <div className="editor-empty-inner">
+                <button
+                  type="button"
+                  className="editor-empty-line"
+                  disabled={vaultLoading}
+                  onClick={() => void handleNewNote()}
+                >
+                  Create new note{' '}
+                  <span className="editor-empty-shortcut">
+                    ({modLabel} N)
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  className="editor-empty-line"
+                  disabled={vaultLoading}
+                  onClick={() => setQuickOpenOpen(true)}
+                >
+                  Go to file{' '}
+                  <span className="editor-empty-shortcut">
+                    ({modLabel} O)
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  className="editor-empty-line"
+                  disabled={!canCloseEditorTab}
+                  onClick={() => closeEditorTab()}
+                >
+                  Close{' '}
+                  <span className="editor-empty-shortcut">
+                    ({modLabel} W)
+                  </span>
+                </button>
+              </div>
             </div>
           )}
         </section>
       </div>
+
+      {quickOpenOpen ? (
+        <>
+          <div
+            className="quick-open-backdrop"
+            role="presentation"
+            onClick={() => setQuickOpenOpen(false)}
+          />
+          <div
+            className="quick-open-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="quick-open-title"
+          >
+            <div className="quick-open-inner">
+              <span id="quick-open-title" className="visually-hidden">
+                Go to file
+              </span>
+              <input
+                ref={quickOpenInputRef}
+                type="search"
+                className="form-control form-control-sm quick-open-input"
+                placeholder="Filter by name or path…"
+                value={quickOpenQuery}
+                onChange={(e) => {
+                  setQuickOpenQuery(e.target.value)
+                  setQuickOpenIndex(0)
+                }}
+                aria-label="Filter files"
+              />
+              <ul className="quick-open-list" role="listbox">
+                {quickOpenMatches.length === 0 ? (
+                  <li className="quick-open-empty text-muted small px-2 py-3">
+                    No matching notes.
+                  </li>
+                ) : (
+                  quickOpenMatches.map((row, i) => (
+                    <li key={row.id} role="none">
+                      <button
+                        type="button"
+                        role="option"
+                        aria-selected={i === quickOpenIndex}
+                        className={`quick-open-row ${i === quickOpenIndex ? 'is-active' : ''}`}
+                        onClick={() => {
+                          dispatch({ type: 'OPEN_FILE', id: row.id })
+                          setQuickOpenOpen(false)
+                        }}
+                      >
+                        <span className="quick-open-path text-truncate">
+                          {row.pathLabel}
+                        </span>
+                      </button>
+                    </li>
+                  ))
+                )}
+              </ul>
+            </div>
+          </div>
+        </>
+      ) : null}
 
       {deleteModal ? (
         <>
@@ -994,7 +1337,8 @@ function App({ onLogout = () => {}, username = '' }) {
                       : `Are you sure you want to delete “${deleteModal.name}”?`}
                   </p>
                   <p className="obs-delete-modal-sub">
-                    It will be moved to your system trash.
+                    This removes it from the server and disk. This cannot be
+                    undone.
                   </p>
                 </div>
                 <div className="modal-footer obs-delete-modal-footer">
