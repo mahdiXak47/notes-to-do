@@ -14,7 +14,7 @@ FROM hub.hamdocker.ir/node:22-alpine AS runtime
 WORKDIR /app
 
 ENV NODE_ENV=production
-RUN npm config set registry https://repo.hmirror.ir/npm
+RUN npm config set registry https://repo.hmirror.ir/npmf
 RUN npm install -g serve@14
 
 COPY --from=build --chown=node:node /app/dist ./dist
