@@ -109,6 +109,11 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 
+MEDIA_ROOT = BASE_DIR / 'media'
+_saving_path = os.environ.get('SAVING_PATH', '').strip()
+# User vault files: <VAULT_ROOT>/<username>/... When SAVING_PATH is unset, use MEDIA_ROOT.
+VAULT_ROOT = Path(_saving_path).resolve() if _saving_path else MEDIA_ROOT
+
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
