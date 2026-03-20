@@ -13,6 +13,21 @@ DEBUG = os.environ.get('DJANGO_DEBUG', 'true').lower() in ('1', 'true', 'yes')
 
 ALLOWED_HOSTS = ['0.0.0.0', 'localhost', '127.0.0.1', 'notestodo-core.darkube.app', 'notes-to-do.darkube.app']
 
+# Scheme + host; required for admin and any HTTPS POST when DEBUG is False (and recommended always).
+CSRF_TRUSTED_ORIGINS = [
+    'https://notestodo-core.darkube.app',
+    'https://notes-to-do.darkube.app',
+    'http://127.0.0.1:8000',
+    'http://localhost:8000',
+    'http://127.0.0.1:5173',
+    'http://localhost:5173',
+]
+_extra_csrf = os.environ.get('DJANGO_CSRF_TRUSTED_ORIGINS', '').strip()
+if _extra_csrf:
+    CSRF_TRUSTED_ORIGINS.extend(
+        o.strip() for o in _extra_csrf.split(',') if o.strip()
+    )
+
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',

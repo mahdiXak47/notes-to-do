@@ -46,6 +46,7 @@ If the user already exists, the script does nothing.
 | `DJANGO_DEBUG` | Default `true` in repo settings; set `false` in production. |
 | `SAVING_PATH` | Vault markdown root on disk; see below. Empty → `MEDIA_ROOT` under `/app/media` in the container. |
 | `DJANGO_CORS_ALLOWED_ORIGINS` | Comma-separated origins if the browser calls the API from another host (not needed when the frontend reverse-proxies `/api` on the same origin). |
+| `DJANGO_CSRF_TRUSTED_ORIGINS` | Optional extra entries (comma-separated, each with scheme, e.g. `https://api.example.com`). Defaults in `settings.py` already include Darkube and local dev URLs for admin CSRF. |
 
 **`ALLOWED_HOSTS`** in `config/settings.py` is fixed to **`0.0.0.0`**, **`localhost`**, and **`127.0.0.1`**. If you deploy behind a real hostname (e.g. `notes-to-do.darkube.app`), extend that list or add optional env-based hosts in settings so Django accepts the **`Host`** header from your ingress.
 
