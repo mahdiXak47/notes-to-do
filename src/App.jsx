@@ -1,5 +1,7 @@
-import { useMemo, useReducer } from 'react'
+import { useEffect, useMemo, useReducer, useState } from 'react'
 import './App.css'
+
+const SKIP_DELETE_CONFIRM_KEY = 'notes_skip_delete_confirm'
 
 function createId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
@@ -101,6 +103,109 @@ function findBreadcrumb(nodes, fileId, acc = []) {
   return null
 }
 
+function findFolderBreadcrumb(nodes, folderId, acc = []) {
+  for (const n of nodes) {
+    if (n.type === 'folder' && n.id === folderId) return [...acc, n.name]
+    if (n.type === 'folder') {
+      const p = findFolderBreadcrumb(n.children, folderId, [...acc, n.name])
+      if (p) return p
+    }
+  }
+  return null
+}
+
+function pathJoined(segments) {
+  if (!segments?.length) return ''
+  return segments.join('/')
+}
+
+function splitDirAndFileName(segments, fallbackName) {
+  if (!segments?.length) return { dir: '', name: fallbackName }
+  if (segments.length === 1) return { dir: '', name: segments[0] }
+  return {
+    dir: segments.slice(0, -1).join('/'),
+    name: segments[segments.length - 1],
+  }
+}
+
+function TreePathLabel({ segments, fallbackName }) {
+  const { dir, name } = splitDirAndFileName(segments, fallbackName)
+  const title = dir ? `${dir}/${name}` : name
+  return (
+    <span className="tree-label text-truncate tree-path-label" title={title}>
+      {dir ? (
+        <>
+          <span className="tree-path-dir">{dir}</span>
+          <span className="tree-path-sep">/</span>
+        </>
+      ) : null}
+      <span className="tree-path-file">{name}</span>
+    </span>
+  )
+}
+
+function collectPinnedFileNodes(vault, pinnedIds) {
+  const out = []
+  function walk(list) {
+    for (const n of list) {
+      if (n.type === 'file' && pinnedIds[n.id]) out.push(n)
+      else if (n.type === 'folder') walk(n.children)
+    }
+  }
+  walk(vault)
+  out.sort((a, b) => {
+    const pa = pathJoined(findBreadcrumb(vault, a.id) || [])
+    const pb = pathJoined(findBreadcrumb(vault, b.id) || [])
+    return pa.localeCompare(pb, undefined, { sensitivity: 'base' })
+  })
+  return out
+}
+
+function stripPinnedFilesFromNodes(nodes, pinnedIds) {
+  const out = []
+  for (const n of nodes) {
+    if (n.type === 'file') {
+      if (!pinnedIds[n.id]) out.push(n)
+    } else {
+      out.push({
+        ...n,
+        children: stripPinnedFilesFromNodes(n.children, pinnedIds),
+      })
+    }
+  }
+  return out
+}
+
+function collectFileIdsUnderNodes(list) {
+  let ids = []
+  for (const n of list) {
+    if (n.type === 'file') ids.push(n.id)
+    else ids = ids.concat(collectFileIdsUnderNodes(n.children))
+  }
+  return ids
+}
+
+function findFolderById(nodes, folderId) {
+  for (const n of nodes) {
+    if (n.type === 'folder' && n.id === folderId) return n
+    if (n.type === 'folder') {
+      const f = findFolderById(n.children, folderId)
+      if (f) return f
+    }
+  }
+  return null
+}
+
+function removeNodeById(nodes, targetId) {
+  return nodes
+    .filter((n) => n.id !== targetId)
+    .map((n) =>
+      n.type === 'folder'
+        ? { ...n, children: removeNodeById(n.children, targetId) }
+        : n,
+    )
+}
+
 function toggleFolder(nodes, folderId) {
   return nodes.map((n) => {
     if (n.type === 'folder') {
@@ -141,6 +246,7 @@ const initialState = {
   nav: { ids: ['file-movies'], i: 0 },
   searchQuery: '',
   sortAZ: false,
+  pinnedIds: {},
 }
 
 function reducer(state, action) {
@@ -236,32 +342,234 @@ function reducer(state, action) {
       }
       return { ...state, vault: addNodeToRoot(state.vault, folder) }
     }
+    case 'TOGGLE_PIN': {
+      const { id } = action
+      const next = { ...state.pinnedIds }
+      if (next[id]) delete next[id]
+      else next[id] = true
+      return { ...state, pinnedIds: next }
+    }
+    case 'DELETE_FILE': {
+      const { id } = action
+      const vault = removeNodeById(state.vault, id)
+      const openTabs = state.openTabs.filter((t) => t !== id)
+      let activeFileId = state.activeFileId
+      if (activeFileId === id) {
+        const idx = state.openTabs.indexOf(id)
+        activeFileId =
+          openTabs[idx - 1] ?? openTabs[idx] ?? openTabs[0] ?? null
+      }
+      const pinnedIds = { ...state.pinnedIds }
+      delete pinnedIds[id]
+      const navIds = state.nav.ids.filter((x) => x !== id)
+      let navI = state.nav.i
+      if (!navIds.length) {
+        return {
+          ...state,
+          vault,
+          openTabs,
+          activeFileId,
+          pinnedIds,
+          nav: { ids: [], i: 0 },
+        }
+      }
+      if (navI >= navIds.length) navI = navIds.length - 1
+      return {
+        ...state,
+        vault,
+        openTabs,
+        activeFileId,
+        pinnedIds,
+        nav: { ids: navIds, i: navI },
+      }
+    }
+    case 'DELETE_FOLDER': {
+      const { id } = action
+      const folder = findFolderById(state.vault, id)
+      const removedFileIds = folder
+        ? collectFileIdsUnderNodes(folder.children)
+        : []
+      const vault = removeNodeById(state.vault, id)
+      const removeSet = new Set([id, ...removedFileIds])
+      const openTabs = state.openTabs.filter((t) => !removeSet.has(t))
+      let activeFileId = state.activeFileId
+      if (activeFileId && removeSet.has(activeFileId)) {
+        const idx = state.openTabs.indexOf(activeFileId)
+        activeFileId =
+          openTabs[idx - 1] ?? openTabs[idx] ?? openTabs[0] ?? null
+      }
+      const pinnedIds = { ...state.pinnedIds }
+      for (const pid of removeSet) delete pinnedIds[pid]
+      const navIds = state.nav.ids.filter((x) => !removeSet.has(x))
+      let navI = state.nav.i
+      if (!navIds.length) {
+        return {
+          ...state,
+          vault,
+          openTabs,
+          activeFileId,
+          pinnedIds,
+          nav: { ids: [], i: 0 },
+        }
+      }
+      if (navI >= navIds.length) navI = navIds.length - 1
+      return {
+        ...state,
+        vault,
+        openTabs,
+        activeFileId,
+        pinnedIds,
+        nav: { ids: navIds, i: navI },
+      }
+    }
     default:
       return state
   }
 }
 
-function TreeRows({ nodes, depth, activeFileId, dispatch, expandedOverrides }) {
+function FileTreeRow({
+  node,
+  vault,
+  pinnedIds,
+  activeFileId,
+  dispatch,
+  onRequestDelete,
+  depth,
+  alwaysShowPath,
+}) {
+  const pathSegs = findBreadcrumb(vault, node.id)
+  const pinned = Boolean(pinnedIds[node.id])
+  const usePath = Boolean(
+    alwaysShowPath || (pinned && pathSegs?.length),
+  )
+  return (
+    <div style={{ paddingLeft: depth * 0.65 + 'rem' }}>
+      <div
+        className={`tree-row-wrap ${activeFileId === node.id ? 'is-active' : ''}`}
+      >
+        <button
+          type="button"
+          className="tree-row tree-row-main"
+          onClick={() => dispatch({ type: 'OPEN_FILE', id: node.id })}
+        >
+          <span className="tree-chevron spacer" aria-hidden>
+            <i className="bi bi-chevron-right" />
+          </span>
+          <TreePathLabel
+            segments={usePath ? pathSegs : null}
+            fallbackName={node.name}
+          />
+        </button>
+        <div className="tree-row-actions">
+          <button
+            type="button"
+            className={`tree-row-action-btn ${pinned ? 'is-active' : ''}`}
+            title={pinned ? 'Unpin' : 'Pin path'}
+            aria-label={pinned ? 'Unpin file' : 'Pin file path'}
+            onClick={(e) => {
+              e.stopPropagation()
+              dispatch({ type: 'TOGGLE_PIN', id: node.id })
+            }}
+          >
+            <i
+              className={pinned ? 'bi bi-pin-fill' : 'bi bi-pin-angle'}
+              aria-hidden
+            />
+          </button>
+          <button
+            type="button"
+            className="tree-row-action-btn tree-row-action-danger"
+            title="Delete file"
+            aria-label={`Delete file ${node.name}`}
+            onClick={(e) => {
+              e.stopPropagation()
+              onRequestDelete({
+                kind: 'file',
+                id: node.id,
+                name: node.name,
+              })
+            }}
+          >
+            <i className="bi bi-trash3" aria-hidden />
+          </button>
+        </div>
+        {node.meta ? <span className="tree-meta">{node.meta}</span> : null}
+      </div>
+    </div>
+  )
+}
+
+function TreeRows({
+  nodes,
+  depth,
+  activeFileId,
+  dispatch,
+  expandedOverrides,
+  vault,
+  pinnedIds,
+  onRequestDelete,
+}) {
   const rows = []
   for (const node of nodes) {
     if (node.type === 'folder') {
       const expanded = expandedOverrides ? true : node.expanded
+      const folderSegs = findFolderBreadcrumb(vault, node.id)
+      const pinned = Boolean(pinnedIds[node.id])
+      const usePath = Boolean(pinned && folderSegs?.length)
       rows.push(
         <div key={node.id} style={{ paddingLeft: depth * 0.65 + 'rem' }}>
-          <button
-            type="button"
-            className="tree-row"
-            onClick={() =>
-              dispatch({ type: 'TOGGLE_FOLDER', folderId: node.id })
-            }
-          >
-            <span className="tree-chevron" aria-hidden>
-              <i
-                className={`bi bi-chevron-${expanded ? 'down' : 'right'}`}
+          <div className="tree-row-wrap">
+            <button
+              type="button"
+              className="tree-row tree-row-main"
+              onClick={() =>
+                dispatch({ type: 'TOGGLE_FOLDER', folderId: node.id })
+              }
+            >
+              <span className="tree-chevron" aria-hidden>
+                <i
+                  className={`bi bi-chevron-${expanded ? 'down' : 'right'}`}
+                />
+              </span>
+              <TreePathLabel
+                segments={usePath ? folderSegs : null}
+                fallbackName={node.name}
               />
-            </span>
-            <span className="tree-label">{node.name}</span>
-          </button>
+            </button>
+            <div className="tree-row-actions">
+              <button
+                type="button"
+                className={`tree-row-action-btn ${pinned ? 'is-active' : ''}`}
+                title={pinned ? 'Unpin' : 'Pin path'}
+                aria-label={pinned ? 'Unpin folder' : 'Pin folder path'}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  dispatch({ type: 'TOGGLE_PIN', id: node.id })
+                }}
+              >
+                <i
+                  className={pinned ? 'bi bi-pin-fill' : 'bi bi-pin-angle'}
+                  aria-hidden
+                />
+              </button>
+              <button
+                type="button"
+                className="tree-row-action-btn tree-row-action-danger"
+                title="Delete folder"
+                aria-label={`Delete folder ${node.name}`}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onRequestDelete({
+                    kind: 'folder',
+                    id: node.id,
+                    name: node.name,
+                  })
+                }}
+              >
+                <i className="bi bi-trash3" aria-hidden />
+              </button>
+            </div>
+          </div>
           {expanded && (
             <TreeRows
               nodes={node.children}
@@ -269,27 +577,26 @@ function TreeRows({ nodes, depth, activeFileId, dispatch, expandedOverrides }) {
               activeFileId={activeFileId}
               dispatch={dispatch}
               expandedOverrides={expandedOverrides}
+              vault={vault}
+              pinnedIds={pinnedIds}
+              onRequestDelete={onRequestDelete}
             />
           )}
         </div>,
       )
     } else {
       rows.push(
-        <div key={node.id} style={{ paddingLeft: depth * 0.65 + 'rem' }}>
-          <button
-            type="button"
-            className={`tree-row ${activeFileId === node.id ? 'active' : ''}`}
-            onClick={() => dispatch({ type: 'OPEN_FILE', id: node.id })}
-          >
-            <span className="tree-chevron spacer" aria-hidden>
-              <i className="bi bi-chevron-right" />
-            </span>
-            <span className="tree-label">{node.name}</span>
-            {node.meta ? (
-              <span className="tree-meta">{node.meta}</span>
-            ) : null}
-          </button>
-        </div>,
+        <FileTreeRow
+          key={node.id}
+          node={node}
+          vault={vault}
+          pinnedIds={pinnedIds}
+          activeFileId={activeFileId}
+          dispatch={dispatch}
+          onRequestDelete={onRequestDelete}
+          depth={depth}
+          alwaysShowPath={false}
+        />,
       )
     }
   }
@@ -298,11 +605,79 @@ function TreeRows({ nodes, depth, activeFileId, dispatch, expandedOverrides }) {
 
 function App({ onLogout = () => {}, username = '' }) {
   const [state, dispatch] = useReducer(reducer, initialState)
+  const [deleteModal, setDeleteModal] = useState(null)
+  const [deleteModalDontAskAgain, setDeleteModalDontAskAgain] = useState(false)
+  const [pinnedSectionOpen, setPinnedSectionOpen] = useState(true)
+
+  useEffect(() => {
+    if (deleteModal) setDeleteModalDontAskAgain(false)
+  }, [deleteModal])
+
+  useEffect(() => {
+    if (!deleteModal) return undefined
+    function onKeyDown(e) {
+      if (e.key === 'Escape') setDeleteModal(null)
+    }
+    const prevOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.body.style.overflow = prevOverflow
+      document.removeEventListener('keydown', onKeyDown)
+    }
+  }, [deleteModal])
+
+  function closeDeleteModal() {
+    setDeleteModal(null)
+  }
+
+  function confirmDelete() {
+    if (!deleteModal) return
+    if (deleteModalDontAskAgain) {
+      try {
+        localStorage.setItem(SKIP_DELETE_CONFIRM_KEY, '1')
+      } catch {
+        /* ignore quota / private mode. */
+      }
+    }
+    if (deleteModal.kind === 'folder') {
+      dispatch({ type: 'DELETE_FOLDER', id: deleteModal.id })
+    } else {
+      dispatch({ type: 'DELETE_FILE', id: deleteModal.id })
+    }
+    setDeleteModal(null)
+  }
+
+  function handleDeleteRequest(target) {
+    try {
+      if (localStorage.getItem(SKIP_DELETE_CONFIRM_KEY) === '1') {
+        if (target.kind === 'folder') {
+          dispatch({ type: 'DELETE_FOLDER', id: target.id })
+        } else {
+          dispatch({ type: 'DELETE_FILE', id: target.id })
+        }
+        return
+      }
+    } catch {
+      /* fall through to modal. */
+    }
+    setDeleteModal(target)
+  }
 
   const displayTree = useMemo(() => {
     const sorted = sortTree(state.vault, state.sortAZ)
     return filterTree(sorted, state.searchQuery)
   }, [state.vault, state.sortAZ, state.searchQuery])
+
+  const pinnedFileNodes = useMemo(
+    () => collectPinnedFileNodes(state.vault, state.pinnedIds),
+    [state.vault, state.pinnedIds],
+  )
+
+  const mainTreeNodes = useMemo(
+    () => stripPinnedFilesFromNodes(displayTree, state.pinnedIds),
+    [displayTree, state.pinnedIds],
+  )
 
   const activeFile = state.activeFileId
     ? findFile(state.vault, state.activeFileId)
@@ -397,12 +772,53 @@ function App({ onLogout = () => {}, username = '' }) {
             />
           </div>
           <div className="sidebar-tree">
+            {pinnedFileNodes.length > 0 ? (
+              <div className="sidebar-pinned-block">
+                <div className="sidebar-pinned-header-row">
+                  <div className="tree-row-wrap sidebar-pinned-folder-wrap">
+                    <button
+                      type="button"
+                      className="tree-row tree-row-main sidebar-pinned-folder"
+                      onClick={() => setPinnedSectionOpen((o) => !o)}
+                      aria-expanded={pinnedSectionOpen}
+                    >
+                      <span className="tree-chevron" aria-hidden>
+                        <i
+                          className={`bi bi-chevron-${pinnedSectionOpen ? 'down' : 'right'}`}
+                        />
+                      </span>
+                      <span className="tree-label text-truncate">
+                        Pinned files
+                      </span>
+                    </button>
+                  </div>
+                </div>
+                {pinnedSectionOpen
+                  ? pinnedFileNodes.map((node) => (
+                      <FileTreeRow
+                        key={node.id}
+                        node={node}
+                        vault={state.vault}
+                        pinnedIds={state.pinnedIds}
+                        activeFileId={state.activeFileId}
+                        dispatch={dispatch}
+                        onRequestDelete={handleDeleteRequest}
+                        depth={1}
+                        alwaysShowPath
+                      />
+                    ))
+                  : null}
+              </div>
+            ) : null}
             <TreeRows
-              nodes={displayTree}
+              nodes={mainTreeNodes}
               depth={0}
               activeFileId={state.activeFileId}
               dispatch={dispatch}
               expandedOverrides={Boolean(state.searchQuery.trim())}
+              vault={state.vault}
+              pinnedIds={state.pinnedIds}
+              onRequestDelete={handleDeleteRequest}
             />
           </div>
           <div className="sidebar-footer">
@@ -522,6 +938,86 @@ function App({ onLogout = () => {}, username = '' }) {
           )}
         </section>
       </div>
+
+      {deleteModal ? (
+        <>
+          <div
+            className="modal fade show d-block obs-delete-modal"
+            tabIndex={-1}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-modal-title"
+          >
+            <div className="modal-dialog modal-dialog-centered" role="document">
+              <div className="modal-content obs-delete-modal-content text-dark">
+                <div className="modal-header obs-delete-modal-header">
+                  <h5 className="modal-title" id="delete-modal-title">
+                    {deleteModal.kind === 'folder'
+                      ? 'Delete folder'
+                      : 'Delete file'}
+                  </h5>
+                  <button
+                    type="button"
+                    className="btn-close obs-delete-modal-close"
+                    aria-label="Close"
+                    onClick={closeDeleteModal}
+                  />
+                </div>
+                <div className="modal-body obs-delete-modal-body">
+                  <p className="obs-delete-modal-lead">
+                    {deleteModal.kind === 'folder'
+                      ? `Are you sure you want to delete the folder “${deleteModal.name}” and everything inside?`
+                      : `Are you sure you want to delete “${deleteModal.name}”?`}
+                  </p>
+                  <p className="obs-delete-modal-sub">
+                    It will be moved to your system trash.
+                  </p>
+                </div>
+                <div className="modal-footer obs-delete-modal-footer">
+                  <div className="form-check obs-delete-modal-check m-0">
+                    <input
+                      className="form-check-input"
+                      type="checkbox"
+                      id="delete-modal-dont-ask"
+                      checked={deleteModalDontAskAgain}
+                      onChange={(e) =>
+                        setDeleteModalDontAskAgain(e.target.checked)
+                      }
+                    />
+                    <label
+                      className="form-check-label"
+                      htmlFor="delete-modal-dont-ask"
+                    >
+                      Don&apos;t ask again
+                    </label>
+                  </div>
+                  <div className="obs-delete-modal-actions d-flex gap-2">
+                    <button
+                      type="button"
+                      className="btn btn-danger obs-delete-modal-btn-danger"
+                      onClick={confirmDelete}
+                    >
+                      Delete
+                    </button>
+                    <button
+                      type="button"
+                      className="btn obs-delete-modal-btn-cancel"
+                      onClick={closeDeleteModal}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div
+            className="modal-backdrop fade show obs-delete-modal-backdrop"
+            role="presentation"
+            onClick={closeDeleteModal}
+          />
+        </>
+      ) : null}
     </div>
   )
 }

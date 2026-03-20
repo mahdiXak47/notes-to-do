@@ -1,9 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import {
-  AUTH_STORAGE_KEY,
-  credentialsMatch,
-  signSession,
-} from './auth.js'
+import { loginWithPassword } from './auth.js'
 import './Login.css'
 
 export default function Login({ onSuccess }) {
@@ -25,18 +21,17 @@ export default function Login({ onSuccess }) {
     e.preventDefault()
     setError('')
     const u = username.trim()
-    if (!credentialsMatch(u, password)) {
-      setError('Invalid username or password.')
+    if (!u) {
+      setError('Enter a username.')
       return
     }
     setBusy(true)
     try {
-      const token = await signSession(u)
-      localStorage.setItem(AUTH_STORAGE_KEY, token)
+      await loginWithPassword(u, password)
       setShowSuccess(true)
       redirectRef.current = window.setTimeout(() => onSuccess(u), 700)
-    } catch {
-      setError('Could not start session.')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not sign in.')
     } finally {
       setBusy(false)
     }
