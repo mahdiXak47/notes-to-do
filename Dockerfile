@@ -1,4 +1,4 @@
-# Build stage: produce static assets in /app/dist.
+# Build stage: produce static assets in /app/dist (same-origin /api/; nginx proxies in runtime).
 FROM hub.hamdocker.ir/node:22-alpine AS build
 WORKDIR /app
 
@@ -9,17 +9,12 @@ RUN npm ci
 COPY . .
 RUN npm run build
 
-# Runtime stage: serve dist only (no nginx; upstream proxy handles TLS/routing).
-FROM hub.hamdocker.ir/node:22-alpine AS runtime
-WORKDIR /app
+# Runtime: nginx proxies /api/ to the Django Service inside the cluster.
+FROM hub.hamdocker.ir/library/nginx:alpine AS runtime
 
-ENV NODE_ENV=production
-RUN npm config set registry https://repo.hmirror.ir/npmf
-RUN npm install -g serve@14
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY --from=build /app/dist /usr/share/nginx/html
 
-COPY --from=build --chown=node:node /app/dist ./dist
+EXPOSE 80
 
-USER node
-EXPOSE 3000
-
-CMD ["serve", "-s", "dist", "-l", "tcp://0.0.0.0:3000"]
+CMD ["nginx", "-g", "daemon off;"]
