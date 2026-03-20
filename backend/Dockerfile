@@ -33,11 +33,14 @@ COPY --from=builder /opt/venv /opt/venv
 
 COPY . .
 
-RUN adduser --disabled-password --gecos '' --no-create-home appuser \
-    && chown -R appuser:appuser /app
+COPY docker-entrypoint.sh /docker-entrypoint.sh
+RUN chmod +x /docker-entrypoint.sh \
+    && adduser --disabled-password --gecos '' --no-create-home appuser \
+    && chown -R appuser:appuser /app /docker-entrypoint.sh
 
 USER appuser
 
 EXPOSE 8000
 
+ENTRYPOINT ["/docker-entrypoint.sh"]
 CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--workers", "2", "config.wsgi:application"]
