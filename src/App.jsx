@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useReducer, useState } from 'react'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import './App.css'
 
 const SKIP_DELETE_CONFIRM_KEY = 'notes_skip_delete_confirm'
@@ -609,14 +611,20 @@ function App({ onLogout = () => {}, username = '' }) {
   const [deleteModalDontAskAgain, setDeleteModalDontAskAgain] = useState(false)
   const [pinnedSectionOpen, setPinnedSectionOpen] = useState(true)
 
-  useEffect(() => {
-    if (deleteModal) setDeleteModalDontAskAgain(false)
-  }, [deleteModal])
+  function openDeleteModal(target) {
+    setDeleteModalDontAskAgain(false)
+    setDeleteModal(target)
+  }
+
+  function closeDeleteModal() {
+    setDeleteModalDontAskAgain(false)
+    setDeleteModal(null)
+  }
 
   useEffect(() => {
     if (!deleteModal) return undefined
     function onKeyDown(e) {
-      if (e.key === 'Escape') setDeleteModal(null)
+      if (e.key === 'Escape') closeDeleteModal()
     }
     const prevOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
@@ -626,10 +634,6 @@ function App({ onLogout = () => {}, username = '' }) {
       document.removeEventListener('keydown', onKeyDown)
     }
   }, [deleteModal])
-
-  function closeDeleteModal() {
-    setDeleteModal(null)
-  }
 
   function confirmDelete() {
     if (!deleteModal) return
@@ -645,7 +649,7 @@ function App({ onLogout = () => {}, username = '' }) {
     } else {
       dispatch({ type: 'DELETE_FILE', id: deleteModal.id })
     }
-    setDeleteModal(null)
+    closeDeleteModal()
   }
 
   function handleDeleteRequest(target) {
@@ -661,7 +665,7 @@ function App({ onLogout = () => {}, username = '' }) {
     } catch {
       /* fall through to modal. */
     }
-    setDeleteModal(target)
+    openDeleteModal(target)
   }
 
   const displayTree = useMemo(() => {
@@ -916,20 +920,40 @@ function App({ onLogout = () => {}, username = '' }) {
           {activeFile ? (
             <div className="editor-main">
               <h1 className="note-title">{activeFile.name}</h1>
-              <textarea
-                className="md-editor"
-                spellCheck={false}
-                value={activeFile.content}
-                onChange={(e) =>
-                  dispatch({
-                    type: 'SET_CONTENT',
-                    fileId: activeFile.id,
-                    content: e.target.value,
-                  })
-                }
-                placeholder="Write Markdown here (raw)…"
-                aria-label="Raw Markdown"
-              />
+              <div className="editor-split">
+                <div className="editor-split-pane editor-split-source">
+                  <textarea
+                    className="md-editor md-editor--split"
+                    spellCheck={false}
+                    value={activeFile.content}
+                    onChange={(e) =>
+                      dispatch({
+                        type: 'SET_CONTENT',
+                        fileId: activeFile.id,
+                        content: e.target.value,
+                      })
+                    }
+                    placeholder="Write Markdown here (raw)…"
+                    aria-label="Raw Markdown source"
+                  />
+                </div>
+                <div
+                  className="editor-split-pane editor-split-preview"
+                  aria-label="Markdown preview"
+                >
+                  <div className="md-preview">
+                    {activeFile.content.trim() ? (
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                        {activeFile.content}
+                      </ReactMarkdown>
+                    ) : (
+                      <p className="md-preview-empty text-muted mb-0">
+                        Preview appears here as you type.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
             </div>
           ) : (
             <div className="editor-empty">
