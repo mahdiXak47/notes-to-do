@@ -19,6 +19,7 @@ import {
   folderPkFromClientId,
   normalizeTreeFromApi,
   notePkFromClientId,
+  patchFolderName,
   patchNoteBody,
   patchNoteName,
   pruneStateForVaultTree,
@@ -203,6 +204,29 @@ function renameFileInTree(nodes, fileId, name) {
   })
 }
 
+function findFolderNode(nodes, folderId) {
+  for (const n of nodes) {
+    if (n.type === 'folder') {
+      if (n.id === folderId) return n
+      const inner = findFolderNode(n.children, folderId)
+      if (inner) return inner
+    }
+  }
+  return null
+}
+
+function renameFolderInTree(nodes, folderId, name) {
+  return nodes.map((n) => {
+    if (n.type === 'folder') {
+      if (n.id === folderId) {
+        return { ...n, name }
+      }
+      return { ...n, children: renameFolderInTree(n.children, folderId, name) }
+    }
+    return n
+  })
+}
+
 function collapseAll(nodes) {
   return nodes.map((n) => {
     if (n.type === 'folder') {
@@ -288,6 +312,11 @@ function reducer(state, action) {
         ...state,
         vault: renameFileInTree(state.vault, action.fileId, action.name),
       }
+    case 'RENAME_FOLDER':
+      return {
+        ...state,
+        vault: renameFolderInTree(state.vault, action.folderId, action.name),
+      }
     case 'COLLAPSE_ALL':
       return { ...state, vault: collapseAll(state.vault) }
     case 'TOGGLE_SORT':
@@ -315,6 +344,8 @@ function FileTreeRow({
   onRequestDelete,
   depth,
   alwaysShowPath,
+  vaultLoading,
+  onRequestNoteTitleEdit,
 }) {
   const pathSegs = findBreadcrumb(vault, node.id)
   const pinned = Boolean(pinnedIds[node.id])
@@ -329,7 +360,15 @@ function FileTreeRow({
         <button
           type="button"
           className="tree-row tree-row-main"
+          draggable={false}
+          title="Click to open · Double-click to rename"
           onClick={() => dispatch({ type: 'OPEN_FILE', id: node.id })}
+          onDoubleClick={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            if (vaultLoading) return
+            onRequestNoteTitleEdit(node.id, node.name)
+          }}
         >
           <span className="tree-chevron spacer" aria-hidden>
             <i className="bi bi-chevron-right" />
@@ -345,6 +384,7 @@ function FileTreeRow({
             className={`tree-row-action-btn ${pinned ? 'is-active' : ''}`}
             title={pinned ? 'Unpin' : 'Pin path'}
             aria-label={pinned ? 'Unpin file' : 'Pin file path'}
+            draggable={false}
             onClick={(e) => {
               e.stopPropagation()
               dispatch({ type: 'TOGGLE_PIN', id: node.id })
@@ -360,6 +400,7 @@ function FileTreeRow({
             className="tree-row-action-btn tree-row-action-danger"
             title="Delete file"
             aria-label={`Delete file ${node.name}`}
+            draggable={false}
             onClick={(e) => {
               e.stopPropagation()
               onRequestDelete({
@@ -387,6 +428,17 @@ function TreeRows({
   vault,
   pinnedIds,
   onRequestDelete,
+  focusedFolderId,
+  onFolderRowFocus,
+  folderRenameId,
+  folderRenameDraft,
+  onFolderRenameDraftChange,
+  onStartFolderRename,
+  onCommitFolderRename,
+  onCancelFolderRename,
+  folderRenameInputRef,
+  vaultLoading,
+  onRequestNoteTitleEdit,
 }) {
   const rows = []
   for (const node of nodes) {
@@ -395,32 +447,89 @@ function TreeRows({
       const folderSegs = findFolderBreadcrumb(vault, node.id)
       const pinned = Boolean(pinnedIds[node.id])
       const usePath = Boolean(pinned && folderSegs?.length)
+      const isRenaming = folderRenameId === node.id
       rows.push(
         <div key={node.id} style={{ paddingLeft: depth * 0.65 + 'rem' }}>
-          <div className="tree-row-wrap">
+          <div
+            className={`tree-row-wrap ${focusedFolderId === node.id ? 'is-folder-focused' : ''}`}
+          >
             <button
               type="button"
-              className="tree-row tree-row-main"
-              onClick={() =>
+              className="tree-row tree-row-chevron-btn"
+              draggable={false}
+              title={expanded ? 'Collapse folder' : 'Expand folder'}
+              aria-expanded={expanded}
+              aria-label={`${expanded ? 'Collapse' : 'Expand'} folder ${node.name}`}
+              onClick={(e) => {
+                e.stopPropagation()
+                onFolderRowFocus(node.id)
                 dispatch({ type: 'TOGGLE_FOLDER', folderId: node.id })
-              }
+              }}
+              onKeyDown={(e) => {
+                if (e.key !== 'Enter' || vaultLoading || isRenaming) return
+                e.preventDefault()
+                onStartFolderRename(node.id, node.name)
+              }}
             >
               <span className="tree-chevron" aria-hidden>
                 <i
                   className={`bi bi-chevron-${expanded ? 'down' : 'right'}`}
                 />
               </span>
-              <TreePathLabel
-                segments={usePath ? folderSegs : null}
-                fallbackName={node.name}
-              />
             </button>
+            {isRenaming ? (
+              <input
+                ref={folderRenameInputRef}
+                type="text"
+                className="tree-folder-rename-input"
+                draggable={false}
+                value={folderRenameDraft}
+                onChange={(e) => onFolderRenameDraftChange(e.target.value)}
+                onBlur={() => void onCommitFolderRename()}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    void onCommitFolderRename()
+                  }
+                  if (e.key === 'Escape') {
+                    e.preventDefault()
+                    onCancelFolderRename()
+                  }
+                }}
+                aria-label="Folder name"
+                maxLength={255}
+                onClick={(e) => e.stopPropagation()}
+              />
+            ) : (
+              <button
+                type="button"
+                className="tree-row tree-row-main tree-row-folder-label"
+                draggable={false}
+                title="Double-click or press Enter to rename"
+                onClick={() => onFolderRowFocus(node.id)}
+                onDoubleClick={(e) => {
+                  e.preventDefault()
+                  if (!vaultLoading) onStartFolderRename(node.id, node.name)
+                }}
+                onKeyDown={(e) => {
+                  if (e.key !== 'Enter' || vaultLoading) return
+                  e.preventDefault()
+                  onStartFolderRename(node.id, node.name)
+                }}
+              >
+                <TreePathLabel
+                  segments={usePath ? folderSegs : null}
+                  fallbackName={node.name}
+                />
+              </button>
+            )}
             <div className="tree-row-actions">
               <button
                 type="button"
                 className={`tree-row-action-btn ${pinned ? 'is-active' : ''}`}
                 title={pinned ? 'Unpin' : 'Pin path'}
                 aria-label={pinned ? 'Unpin folder' : 'Pin folder path'}
+                draggable={false}
                 onClick={(e) => {
                   e.stopPropagation()
                   dispatch({ type: 'TOGGLE_PIN', id: node.id })
@@ -436,6 +545,7 @@ function TreeRows({
                 className="tree-row-action-btn tree-row-action-danger"
                 title="Delete folder"
                 aria-label={`Delete folder ${node.name}`}
+                draggable={false}
                 onClick={(e) => {
                   e.stopPropagation()
                   onRequestDelete({
@@ -459,6 +569,17 @@ function TreeRows({
               vault={vault}
               pinnedIds={pinnedIds}
               onRequestDelete={onRequestDelete}
+              focusedFolderId={focusedFolderId}
+              onFolderRowFocus={onFolderRowFocus}
+              folderRenameId={folderRenameId}
+              folderRenameDraft={folderRenameDraft}
+              onFolderRenameDraftChange={onFolderRenameDraftChange}
+              onStartFolderRename={onStartFolderRename}
+              onCommitFolderRename={onCommitFolderRename}
+              onCancelFolderRename={onCancelFolderRename}
+              folderRenameInputRef={folderRenameInputRef}
+              vaultLoading={vaultLoading}
+              onRequestNoteTitleEdit={onRequestNoteTitleEdit}
             />
           )}
         </div>,
@@ -475,6 +596,8 @@ function TreeRows({
           onRequestDelete={onRequestDelete}
           depth={depth}
           alwaysShowPath={false}
+          vaultLoading={vaultLoading}
+          onRequestNoteTitleEdit={onRequestNoteTitleEdit}
         />,
       )
     }
@@ -496,6 +619,13 @@ function App({ onLogout = () => {}, username = '' }) {
   const [titleEditing, setTitleEditing] = useState(false)
   const [titleDraft, setTitleDraft] = useState('')
   const titleInputRef = useRef(null)
+  const titleBlurIgnoredUntilRef = useRef(0)
+  const prevTitleResetFileIdRef = useRef(null)
+  const pendingNoteTitleEditRef = useRef(null)
+  const [focusedFolderId, setFocusedFolderId] = useState(null)
+  const [folderRenameId, setFolderRenameId] = useState(null)
+  const [folderRenameDraft, setFolderRenameDraft] = useState('')
+  const folderRenameInputRef = useRef(null)
   const vaultRef = useRef([])
   vaultRef.current = state.vault
   const lastSavedBodyRef = useRef({})
@@ -629,6 +759,79 @@ function App({ onLogout = () => {}, username = '' }) {
       )
     }
   }
+
+  const onFolderRowFocus = useCallback((folderId) => {
+    setFocusedFolderId(folderId)
+  }, [])
+
+  const cancelFolderRename = useCallback(() => {
+    setFolderRenameId(null)
+    setFolderRenameDraft('')
+  }, [])
+
+  const commitFolderRename = useCallback(async () => {
+    if (!folderRenameId) return
+    const folder = findFolderNode(vaultRef.current, folderRenameId)
+    const trimmed = folderRenameDraft.trim()
+    if (!folder) {
+      cancelFolderRename()
+      return
+    }
+    if (!trimmed) {
+      setFolderRenameDraft(folder.name)
+      setFolderRenameId(null)
+      return
+    }
+    if (trimmed === folder.name) {
+      setFolderRenameId(null)
+      return
+    }
+    const pk = folderPkFromClientId(folderRenameId)
+    if (pk == null) {
+      setFolderRenameId(null)
+      return
+    }
+    try {
+      setVaultError(null)
+      await patchFolderName(pk, trimmed)
+      dispatch({
+        type: 'RENAME_FOLDER',
+        folderId: folderRenameId,
+        name: trimmed,
+      })
+      setFolderRenameId(null)
+      setFolderRenameDraft('')
+    } catch (e) {
+      setVaultError(
+        e instanceof Error ? e.message : 'Could not rename folder.',
+      )
+      setFolderRenameDraft(folder.name)
+      setFolderRenameId(null)
+    }
+  }, [folderRenameId, folderRenameDraft, dispatch, cancelFolderRename])
+
+  const onStartFolderRename = useCallback(
+    (folderId, name) => {
+      if (vaultLoading) return
+      setFolderRenameId(folderId)
+      setFolderRenameDraft(name)
+    },
+    [vaultLoading],
+  )
+
+  const requestNoteTitleEdit = useCallback(
+    (fileId, name) => {
+      if (vaultLoading) return
+      if (state.activeFileId === fileId) {
+        setTitleDraft(name)
+        setTitleEditing(true)
+        return
+      }
+      pendingNoteTitleEditRef.current = { fileId, name }
+      dispatch({ type: 'OPEN_FILE', id: fileId })
+    },
+    [vaultLoading, state.activeFileId, dispatch],
+  )
 
   const displayTree = useMemo(() => {
     const sorted = sortTree(state.vault, state.sortAZ)
@@ -776,9 +979,27 @@ function App({ onLogout = () => {}, username = '' }) {
     : null
 
   useEffect(() => {
+    if (prevTitleResetFileIdRef.current === state.activeFileId) return
+    prevTitleResetFileIdRef.current = state.activeFileId
+    const pending = pendingNoteTitleEditRef.current
+    pendingNoteTitleEditRef.current = null
+    if (pending && state.activeFileId && pending.fileId === state.activeFileId) {
+      setTitleDraft(pending.name)
+      setTitleEditing(true)
+      return
+    }
     setTitleEditing(false)
     setTitleDraft('')
   }, [state.activeFileId])
+
+  useEffect(() => {
+    if (!titleEditing) return undefined
+    titleBlurIgnoredUntilRef.current = Date.now() + 220
+    const t = window.setTimeout(() => {
+      titleBlurIgnoredUntilRef.current = 0
+    }, 240)
+    return () => window.clearTimeout(t)
+  }, [titleEditing])
 
   useEffect(() => {
     if (!titleEditing) return undefined
@@ -791,6 +1012,25 @@ function App({ onLogout = () => {}, username = '' }) {
     })
     return () => window.cancelAnimationFrame(raf)
   }, [titleEditing])
+
+  useEffect(() => {
+    if (!folderRenameId) return undefined
+    const raf = window.requestAnimationFrame(() => {
+      const el = folderRenameInputRef.current
+      if (el) {
+        el.focus()
+        el.select()
+      }
+    })
+    return () => window.cancelAnimationFrame(raf)
+  }, [folderRenameId])
+
+  useEffect(() => {
+    if (!state.activeFileId) return
+    setFocusedFolderId(null)
+    setFolderRenameId(null)
+    setFolderRenameDraft('')
+  }, [state.activeFileId])
 
   const commitNoteTitleEdit = useCallback(async () => {
     if (!activeFile) {
@@ -1010,6 +1250,8 @@ function App({ onLogout = () => {}, username = '' }) {
                         onRequestDelete={handleDeleteRequest}
                         depth={1}
                         alwaysShowPath
+                        vaultLoading={vaultLoading}
+                        onRequestNoteTitleEdit={requestNoteTitleEdit}
                       />
                     ))
                   : null}
@@ -1025,6 +1267,17 @@ function App({ onLogout = () => {}, username = '' }) {
                 vault={state.vault}
                 pinnedIds={state.pinnedIds}
                 onRequestDelete={handleDeleteRequest}
+                focusedFolderId={focusedFolderId}
+                onFolderRowFocus={onFolderRowFocus}
+                folderRenameId={folderRenameId}
+                folderRenameDraft={folderRenameDraft}
+                onFolderRenameDraftChange={setFolderRenameDraft}
+                onStartFolderRename={onStartFolderRename}
+                onCommitFolderRename={commitFolderRename}
+                onCancelFolderRename={cancelFolderRename}
+                folderRenameInputRef={folderRenameInputRef}
+                vaultLoading={vaultLoading}
+                onRequestNoteTitleEdit={requestNoteTitleEdit}
               />
             ) : null}
           </div>
@@ -1130,10 +1383,14 @@ function App({ onLogout = () => {}, username = '' }) {
                   className="note-title-input"
                   value={titleDraft}
                   onChange={(e) => setTitleDraft(e.target.value)}
-                  onBlur={() => void commitNoteTitleEdit()}
+                  onBlur={() => {
+                    if (Date.now() < titleBlurIgnoredUntilRef.current) return
+                    void commitNoteTitleEdit()
+                  }}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') {
                       e.preventDefault()
+                      e.stopPropagation()
                       void commitNoteTitleEdit()
                     }
                     if (e.key === 'Escape') {
@@ -1153,6 +1410,12 @@ function App({ onLogout = () => {}, username = '' }) {
                     setTitleDraft(activeFile.name)
                     setTitleEditing(true)
                   }}
+                  onDoubleClick={(e) => {
+                    e.preventDefault()
+                    if (vaultLoading) return
+                    setTitleDraft(activeFile.name)
+                    setTitleEditing(true)
+                  }}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' || e.key === ' ') {
                       e.preventDefault()
@@ -1164,7 +1427,7 @@ function App({ onLogout = () => {}, username = '' }) {
                   }}
                   role="button"
                   tabIndex={0}
-                  title="Click to rename"
+                  title="Click or double-click to rename"
                 >
                   {activeFile.name}
                 </h1>

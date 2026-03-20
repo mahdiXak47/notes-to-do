@@ -147,6 +147,29 @@ export async function patchNoteName(notePk, name) {
   return patchNote(notePk, { name })
 }
 
+export async function patchFolder(folderPk, payload) {
+  const res = await authorizedFetch(`/api/vault/folders/${folderPk}/`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  })
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}))
+    const nameErr = data.name?.[0]
+    const msg =
+      typeof nameErr === 'string'
+        ? nameErr
+        : typeof data.detail === 'string'
+          ? data.detail
+          : JSON.stringify(data) || `Failed to update folder (${res.status}).`
+    throw new Error(msg)
+  }
+  return res.json()
+}
+
+export async function patchFolderName(folderPk, name) {
+  return patchFolder(folderPk, { name })
+}
+
 export async function deleteFolder(folderPk) {
   const res = await authorizedFetch(`/api/vault/folders/${folderPk}/`, {
     method: 'DELETE',
