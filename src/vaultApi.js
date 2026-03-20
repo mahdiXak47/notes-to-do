@@ -1,0 +1,218 @@
+import { authorizedFetch } from './auth.js'
+
+function pickUniqueName(base, used) {
+  const set = new Set(used.map((s) => s.toLowerCase()))
+  if (!set.has(base.toLowerCase())) return base
+  let i = 2
+  while (set.has(`${base} (${i})`.toLowerCase())) i += 1
+  return `${base} (${i})`
+}
+
+function collectSiblingNamesAtRoot(nodes) {
+  const folders = []
+  const notes = []
+  for (const n of nodes) {
+    if (n.type === 'folder') folders.push(n.name)
+    else notes.push(n.name)
+  }
+  return { folders, notes }
+}
+
+export function normalizeTreeFromApi(apiNodes, expandedByFolderId) {
+  return apiNodes.map((n) => {
+    if (n.type === 'folder') {
+      const uid = `f-${n.id}`
+      return {
+        id: uid,
+        type: 'folder',
+        name: n.name,
+        expanded: expandedByFolderId[uid] ?? true,
+        children: normalizeTreeFromApi(n.children || [], expandedByFolderId),
+      }
+    }
+    return {
+      id: `n-${n.id}`,
+      type: 'file',
+      name: n.name,
+      meta: n.meta ?? null,
+      content: n.content ?? '',
+    }
+  })
+}
+
+export function collectExpandedByFolderId(nodes, acc = {}) {
+  for (const n of nodes) {
+    if (n.type === 'folder') {
+      acc[n.id] = n.expanded
+      collectExpandedByFolderId(n.children, acc)
+    }
+  }
+  return acc
+}
+
+export async function fetchVaultTree() {
+  const res = await authorizedFetch('/api/vault/tree/', { method: 'GET' })
+  if (!res.ok) {
+    const err = await res.text().catch(() => '')
+    throw new Error(err || `Failed to load vault (${res.status}).`)
+  }
+  return res.json()
+}
+
+export async function createFolder(parentId, name, rootNodes) {
+  const { folders } = collectSiblingNamesAtRoot(
+    parentId == null ? rootNodes : findFolderByUid(rootNodes, parentId)?.children ?? [],
+  )
+  const finalName = pickUniqueName(name, folders)
+  const res = await authorizedFetch('/api/vault/folders/', {
+    method: 'POST',
+    body: JSON.stringify({
+      parent: parentId == null ? null : pkFromFolderUid(parentId),
+      name: finalName,
+    }),
+  })
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}))
+    throw new Error(JSON.stringify(data) || 'Failed to create folder.')
+  }
+  return res.json()
+}
+
+export async function createNote(folderUid, name, rootNodes) {
+  const siblings =
+    folderUid == null
+      ? collectSiblingNamesAtRoot(rootNodes).notes
+      : collectSiblingNamesInFolder(rootNodes, folderUid).notes
+  const finalName = pickUniqueName(name, siblings)
+  const res = await authorizedFetch('/api/vault/notes/', {
+    method: 'POST',
+    body: JSON.stringify({
+      folder: folderUid == null ? null : pkFromFolderUid(folderUid),
+      name: finalName,
+      body: '',
+    }),
+  })
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}))
+    throw new Error(JSON.stringify(data) || 'Failed to create note.')
+  }
+  return res.json()
+}
+
+function pkFromFolderUid(uid) {
+  return Number(String(uid).replace(/^f-/, ''), 10)
+}
+
+function findFolderByUid(nodes, folderUid) {
+  for (const n of nodes) {
+    if (n.type === 'folder') {
+      if (n.id === folderUid) return n
+      const inner = findFolderByUid(n.children, folderUid)
+      if (inner) return inner
+    }
+  }
+  return null
+}
+
+function collectSiblingNamesInFolder(nodes, folderUid) {
+  const folder = findFolderByUid(nodes, folderUid)
+  if (!folder) return { folders: [], notes: [] }
+  return collectSiblingNamesAtRoot(folder.children || [])
+}
+
+export async function patchNote(notePk, payload) {
+  const res = await authorizedFetch(`/api/vault/notes/${notePk}/`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  })
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}))
+    const nameErr = data.name?.[0]
+    const msg =
+      typeof nameErr === 'string'
+        ? nameErr
+        : typeof data.detail === 'string'
+          ? data.detail
+          : JSON.stringify(data) || `Failed to update note (${res.status}).`
+    throw new Error(msg)
+  }
+  return res.json()
+}
+
+export async function patchNoteBody(notePk, body) {
+  return patchNote(notePk, { body })
+}
+
+export async function patchNoteName(notePk, name) {
+  return patchNote(notePk, { name })
+}
+
+export async function deleteFolder(folderPk) {
+  const res = await authorizedFetch(`/api/vault/folders/${folderPk}/`, {
+    method: 'DELETE',
+  })
+  if (!res.ok) {
+    throw new Error(`Failed to delete folder (${res.status}).`)
+  }
+}
+
+export async function deleteNote(notePk) {
+  const res = await authorizedFetch(`/api/vault/notes/${notePk}/`, {
+    method: 'DELETE',
+  })
+  if (!res.ok) {
+    throw new Error(`Failed to delete note (${res.status}).`)
+  }
+}
+
+export function notePkFromClientId(clientId) {
+  if (!clientId || !String(clientId).startsWith('n-')) return null
+  const n = Number(String(clientId).slice(2), 10)
+  return Number.isFinite(n) ? n : null
+}
+
+export function folderPkFromClientId(clientId) {
+  if (!clientId || !String(clientId).startsWith('f-')) return null
+  const n = Number(String(clientId).slice(2), 10)
+  return Number.isFinite(n) ? n : null
+}
+
+function collectAllVaultIds(nodes, acc = new Set()) {
+  for (const n of nodes) {
+    acc.add(n.id)
+    if (n.type === 'folder') collectAllVaultIds(n.children, acc)
+  }
+  return acc
+}
+
+export function pruneStateForVaultTree(prevState, newVault) {
+  const ids = collectAllVaultIds(newVault)
+  const openTabs = prevState.openTabs.filter((id) => ids.has(id))
+  let activeFileId = prevState.activeFileId
+  if (activeFileId && !ids.has(activeFileId)) {
+    const idx = prevState.openTabs.indexOf(activeFileId)
+    activeFileId =
+      openTabs[idx - 1] ?? openTabs[idx] ?? openTabs[0] ?? null
+  }
+  const navIds = prevState.nav.ids.filter((id) => ids.has(id))
+  let navI = prevState.nav.i
+  if (!navIds.length) {
+    return {
+      openTabs,
+      activeFileId,
+      pinnedIds: Object.fromEntries(
+        Object.entries(prevState.pinnedIds).filter(([k]) => ids.has(k)),
+      ),
+      nav: { ids: [], i: 0 },
+    }
+  }
+  if (navI >= navIds.length) navI = navIds.length - 1
+  return {
+    openTabs,
+    activeFileId,
+    pinnedIds: Object.fromEntries(
+      Object.entries(prevState.pinnedIds).filter(([k]) => ids.has(k)),
+    ),
+    nav: { ids: navIds, i: navI },
+  }
+}

@@ -96,6 +96,35 @@ export function authHeaders() {
   return t ? { Authorization: `Bearer ${t}` } : {}
 }
 
+export async function authorizedFetch(path, options = {}) {
+  const ok = await ensureSession()
+  if (!ok) {
+    throw new Error('Session expired.')
+  }
+  const headers = {
+    ...options.headers,
+    ...authHeaders(),
+  }
+  if (options.body != null && !headers['Content-Type']) {
+    headers['Content-Type'] = 'application/json'
+  }
+  const res = await fetch(apiUrl(path), { ...options, headers })
+  if (res.status === 401) {
+    if (await refreshAccessToken()) {
+      const retryHeaders = {
+        ...options.headers,
+        ...authHeaders(),
+      }
+      if (options.body != null && !retryHeaders['Content-Type']) {
+        retryHeaders['Content-Type'] = 'application/json'
+      }
+      return fetch(apiUrl(path), { ...options, headers: retryHeaders })
+    }
+    clearStoredToken()
+  }
+  return res
+}
+
 export function clearStoredToken() {
   localStorage.removeItem(ACCESS_KEY)
   localStorage.removeItem(REFRESH_KEY)
