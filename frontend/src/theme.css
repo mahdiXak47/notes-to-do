@@ -1,22 +1,30 @@
-/* Obsidian-like dark shell; editor #171717, sidebar #1e1e1e. */
+/* Cobalt #0047AB, navy #000080, sky #82C8E5; surfaces Alice blue #F0F8FF + white. */
 
 :root {
-  --obs-bg-editor: #171717;
-  --obs-bg-sidebar: #1e1e1e;
-  --obs-bg-tab-active: #252525;
-  --obs-bg-tab-bar: #1a1a1a;
-  --obs-text: #ffffff;
-  --obs-text-muted: #b0b0b0;
-  --obs-selection: #2a2a2a;
-  --obs-border: #333333;
-  --obs-icon-dim: #777777;
+  --palette-cobalt: #0047ab;
+  --palette-navy: #000080;
+  --palette-sky: #82c8e5;
+  --palette-alice: #f0f8ff;
+  --palette-white: #ffffff;
 
-  --bs-body-bg: var(--obs-bg-editor);
-  --bs-body-color: var(--obs-text-muted);
+  --obs-bg-editor: var(--palette-alice);
+  --obs-bg-sidebar: var(--palette-navy);
+  --obs-bg-tab-active: var(--palette-white);
+  --obs-bg-tab-bar: #dbeaf6;
+  --obs-text: #0d1b2a;
+  --obs-text-muted: #3d5d78;
+  --obs-selection: rgba(0, 71, 171, 0.12);
+  --obs-border: rgba(0, 71, 171, 0.18);
+  --obs-icon-dim: #5a7a95;
+
+  --bs-primary: var(--palette-cobalt);
+  --bs-primary-rgb: 0, 71, 171;
+  --bs-body-bg: var(--palette-alice);
+  --bs-body-color: var(--obs-text);
   --bs-secondary-color: var(--obs-text-muted);
   --bs-border-color: var(--obs-border);
-  --bs-link-color: var(--obs-text-muted);
-  --bs-link-hover-color: var(--obs-text);
+  --bs-link-color: var(--palette-cobalt);
+  --bs-link-hover-color: var(--palette-navy);
 }
 
 body {

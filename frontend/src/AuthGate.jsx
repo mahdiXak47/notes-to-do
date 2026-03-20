@@ -2,9 +2,9 @@ import { useEffect, useState } from 'react'
 import App from './App.jsx'
 import Login from './Login.jsx'
 import {
-  AUTH_STORAGE_KEY,
   clearStoredToken,
-  verifySession,
+  ensureSession,
+  getStoredUsername,
 } from './auth.js'
 import './Login.css'
 
@@ -15,14 +15,13 @@ export default function AuthGate() {
   useEffect(() => {
     let cancelled = false
     ;(async () => {
-      const token = localStorage.getItem(AUTH_STORAGE_KEY)
-      const payload = token ? await verifySession(token) : null
+      const ok = await ensureSession()
       if (cancelled) return
-      if (payload?.sub) {
-        setSessionUser(String(payload.sub))
+      if (ok) {
+        setSessionUser(getStoredUsername())
         setPhase('authed')
       } else {
-        if (token) clearStoredToken()
+        clearStoredToken()
         setPhase('guest')
       }
     })()
@@ -34,10 +33,8 @@ export default function AuthGate() {
   useEffect(() => {
     if (phase !== 'authed') return undefined
     const tick = async () => {
-      const token = localStorage.getItem(AUTH_STORAGE_KEY)
-      const payload = token ? await verifySession(token) : null
-      if (!payload?.sub) {
-        clearStoredToken()
+      const ok = await ensureSession()
+      if (!ok) {
         setSessionUser(null)
         setPhase('guest')
       }

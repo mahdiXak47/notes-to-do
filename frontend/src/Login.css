@@ -4,48 +4,50 @@
   align-items: center;
   justify-content: center;
   padding: 1.5rem;
-  background-color: var(--obs-bg-editor);
+  background-color: var(--palette-alice, #f0f8ff);
 }
 
 .login-card {
   width: 100%;
   max-width: 380px;
-  background-color: var(--obs-bg-sidebar);
-  color: var(--obs-text);
+  background-color: #ffffff;
+  border: 1px solid rgba(0, 71, 171, 0.15);
+  box-shadow: 0 8px 32px rgba(0, 0, 80, 0.08);
+  color: #0d1b2a;
 }
 
 .login-title {
-  color: var(--obs-text);
+  color: #000080;
   font-weight: 600;
 }
 
 .login-subtitle {
-  color: var(--obs-text-muted);
+  color: #5a7a95;
 }
 
 .login-card .form-label {
-  color: var(--obs-text-muted);
+  color: #3d5d78;
 }
 
 .form-control-dark {
-  background-color: var(--obs-bg-editor);
-  border-color: var(--obs-border);
-  color: var(--obs-text);
+  background-color: #f8fcff;
+  border-color: rgba(0, 71, 171, 0.22);
+  color: #0d1b2a;
 }
 
 .form-control-dark:focus {
-  background-color: var(--obs-bg-editor);
-  border-color: var(--obs-icon-dim);
-  color: var(--obs-text);
-  box-shadow: none;
+  background-color: #ffffff;
+  border-color: #0047ab;
+  color: #0d1b2a;
+  box-shadow: 0 0 0 2px rgba(130, 200, 229, 0.35);
 }
 
 .form-control-dark::placeholder {
-  color: var(--obs-icon-dim);
+  color: #8aa3b5;
 }
 
 .auth-loading {
-  background-color: var(--obs-bg-editor);
-  color: var(--obs-text-muted);
+  background-color: var(--palette-alice, #f0f8ff);
+  color: #3d5d78;
   font-size: 0.875rem;
 }

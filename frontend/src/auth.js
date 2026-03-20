@@ -1,38 +1,105 @@
-import * as jose from 'jose'
+const ACCESS_KEY = 'notes_auth_access'
+const REFRESH_KEY = 'notes_auth_refresh'
+const USERNAME_KEY = 'notes_auth_username'
 
-export const AUTH_STORAGE_KEY = 'notes_auth_jwt'
-
-const LOGIN_USERNAME = 'mahdixak'
-const LOGIN_PASSWORD =
-  'wJExo2bg3DQ1PwgUDUWnLkW3x71DWka1zV9K5tsEltk'
-
-const SECRET = new TextEncoder().encode(
-  import.meta.env.VITE_JWT_SECRET ??
-    'notes-to-do-client-only-hs256-secret-min-length-32',
-)
-
-export function credentialsMatch(username, password) {
-  return username === LOGIN_USERNAME && password === LOGIN_PASSWORD
+function apiOrigin() {
+  const base = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '')
+  return base || ''
 }
 
-export async function signSession(username) {
-  return new jose.SignJWT({ sub: username })
-    .setProtectedHeader({ alg: 'HS256' })
-    .setIssuedAt()
-    .setExpirationTime('1h')
-    .sign(SECRET)
+function apiUrl(path) {
+  const p = path.startsWith('/') ? path : `/${path}`
+  const origin = apiOrigin()
+  return origin ? `${origin}${p}` : p
 }
 
-export async function verifySession(token) {
-  if (!token || typeof token !== 'string') return null
+function decodeJwtPayload(token) {
   try {
-    const { payload } = await jose.jwtVerify(token, SECRET)
-    return payload
+    const part = token.split('.')[1]
+    if (!part) return null
+    const b64 = part.replace(/-/g, '+').replace(/_/g, '/')
+    const pad = b64.length % 4 === 0 ? '' : '='.repeat(4 - (b64.length % 4))
+    return JSON.parse(atob(b64 + pad))
   } catch {
     return null
   }
 }
 
-export function clearStoredToken() {
-  localStorage.removeItem(AUTH_STORAGE_KEY)
+function accessExpiresAtMs(token) {
+  const p = decodeJwtPayload(token)
+  if (!p?.exp) return null
+  return p.exp * 1000
 }
+
+function isAccessValid(token, skewMs = 5000) {
+  if (!token) return false
+  const expMs = accessExpiresAtMs(token)
+  if (!expMs) return false
+  return expMs > Date.now() + skewMs
+}
+
+export async function loginWithPassword(username, password) {
+  const res = await fetch(apiUrl('/api/auth/token/'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, password }),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) {
+    const msg =
+      data.detail ||
+      (typeof data === 'object' && data.non_field_errors?.[0]) ||
+      'Invalid username or password.'
+    throw new Error(typeof msg === 'string' ? msg : 'Login failed.')
+  }
+  if (!data.access || !data.refresh) {
+    throw new Error('Login failed.')
+  }
+  localStorage.setItem(ACCESS_KEY, data.access)
+  localStorage.setItem(REFRESH_KEY, data.refresh)
+  localStorage.setItem(USERNAME_KEY, username)
+}
+
+export async function refreshAccessToken() {
+  const refresh = localStorage.getItem(REFRESH_KEY)
+  if (!refresh) return false
+  const res = await fetch(apiUrl('/api/auth/token/refresh/'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ refresh }),
+  })
+  if (!res.ok) return false
+  const data = await res.json().catch(() => ({}))
+  if (!data.access) return false
+  localStorage.setItem(ACCESS_KEY, data.access)
+  return true
+}
+
+export async function ensureSession() {
+  const access = localStorage.getItem(ACCESS_KEY)
+  if (isAccessValid(access)) return true
+  if (await refreshAccessToken()) return true
+  clearStoredToken()
+  return false
+}
+
+export function getStoredUsername() {
+  return localStorage.getItem(USERNAME_KEY) || ''
+}
+
+export function getAccessToken() {
+  return localStorage.getItem(ACCESS_KEY)
+}
+
+export function authHeaders() {
+  const t = getAccessToken()
+  return t ? { Authorization: `Bearer ${t}` } : {}
+}
+
+export function clearStoredToken() {
+  localStorage.removeItem(ACCESS_KEY)
+  localStorage.removeItem(REFRESH_KEY)
+  localStorage.removeItem(USERNAME_KEY)
+}
+
+export const AUTH_STORAGE_KEY = ACCESS_KEY
