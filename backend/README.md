@@ -2,7 +2,9 @@
 
 ## Docker
 
-Multi-stage image: **`Dockerfile`** (Hamravesh mirror **`hub.hamdocker.ir/library/python:3.12-slim`**, PyPI index **`https://repo.hmirror.ir/python/simple`**). Runtime runs **Gunicorn** on port **8000**.
+The image runs **`python manage.py collectstatic`** during the build. **WhiteNoise** serves **`/static/`** (Django admin CSS/JS included). Without that step, admin pages return **404** for static URLs and the browser reports wrong **MIME types** because it receives HTML error bodies instead of CSS/JS.
+
+Runtime runs **Gunicorn** on port **8000**.
 
 **Entrypoint** (`docker-entrypoint.sh`):
 
