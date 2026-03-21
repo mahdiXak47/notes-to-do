@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
-import { notePkFromClientId, patchNoteBody } from '../vaultApi.js'
-import { findFile } from '../vaultTreePaths.js'
+import { notePkFromClientId, patchNoteBody } from '../lib/vaultApi.js'
+import { findFile } from '../lib/vaultTreePaths.js'
 
 export function useNoteAutosave({
   activeFileId,
