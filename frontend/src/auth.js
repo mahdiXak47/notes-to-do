@@ -7,7 +7,7 @@ function apiOrigin() {
   return base || ''
 }
 
-function apiUrl(path) {
+export function apiUrl(path) {
   const p = path.startsWith('/') ? path : `/${path}`
   const origin = apiOrigin()
   return origin ? `${origin}${p}` : p
