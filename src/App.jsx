@@ -6,7 +6,7 @@ import {
   useRef,
   useState,
 } from 'react'
-import './App.css'
+import './app/App.css'
 import { DeleteConfirmModal } from './DeleteConfirmModal.jsx'
 import { EditorEmptyState } from './EditorEmptyState.jsx'
 import { MarkdownEditor } from './MarkdownEditor.jsx'
@@ -24,19 +24,19 @@ import {
   folderPkFromClientId,
   normalizeTreeFromApi,
   notePkFromClientId,
-  patchFolderName,
-  patchNoteBody,
   patchNoteName,
 } from './vaultApi.js'
 import { initialVaultState, vaultReducer } from './vaultReducer.js'
 import {
   collectPinnedFileNodes,
   filterTree,
-  findFolderNode,
   sortTree,
   stripPinnedFilesFromNodes,
 } from './vaultTreeOps.js'
 import { findFile } from './vaultTreePaths.js'
+import { useFolderRename } from './hooks/useFolderRename.js'
+import { useNoteAutosave } from './hooks/useNoteAutosave.js'
+import { useVaultKeyboardShortcuts } from './hooks/useVaultKeyboardShortcuts.js'
 
 const SKIP_DELETE_CONFIRM_KEY = 'notes_skip_delete_confirm'
 
@@ -55,14 +55,8 @@ function App({ onLogout = () => {}, username = '' }) {
   const [quickOpenOpen, setQuickOpenOpen] = useState(false)
   const vaultNavbarRef = useRef(null)
   const pendingNoteTitleEditRef = useRef(null)
-  const [focusedFolderId, setFocusedFolderId] = useState(null)
-  const [folderRenameId, setFolderRenameId] = useState(null)
-  const [folderRenameDraft, setFolderRenameDraft] = useState('')
-  const folderRenameInputRef = useRef(null)
   const vaultRef = useRef([])
   vaultRef.current = state.vault
-  const lastSavedBodyRef = useRef({})
-  const prevActiveFileIdRef = useRef(null)
   const [settingsModalOpen, setSettingsModalOpen] = useState(false)
   const modLabel = useMemo(() => modKeyLabel(), [])
 
@@ -102,6 +96,36 @@ function App({ onLogout = () => {}, username = '' }) {
       cancelled = true
     }
   }, [username])
+
+  const activeFile = state.activeFileId
+    ? findFile(state.vault, state.activeFileId)
+    : null
+
+  useNoteAutosave({
+    activeFileId: state.activeFileId,
+    activeFileContent: activeFile?.content,
+    vault: state.vault,
+    vaultRef,
+    setVaultError,
+  })
+
+  const {
+    focusedFolderId,
+    onFolderRowFocus,
+    folderRenameId,
+    folderRenameDraft,
+    setFolderRenameDraft,
+    folderRenameInputRef,
+    onStartFolderRename,
+    commitFolderRename,
+    cancelFolderRename,
+  } = useFolderRename({
+    vaultRef,
+    vaultLoading,
+    dispatch,
+    activeFileId: state.activeFileId,
+    setVaultError,
+  })
 
   const openDeleteModal = useCallback((target) => {
     setDeleteModalDontAskAgain(false)
@@ -184,65 +208,6 @@ function App({ onLogout = () => {}, username = '' }) {
     }
   }
 
-  const onFolderRowFocus = useCallback((folderId) => {
-    setFocusedFolderId(folderId)
-  }, [])
-
-  const cancelFolderRename = useCallback(() => {
-    setFolderRenameId(null)
-    setFolderRenameDraft('')
-  }, [])
-
-  const commitFolderRename = useCallback(async () => {
-    if (!folderRenameId) return
-    const folder = findFolderNode(vaultRef.current, folderRenameId)
-    const trimmed = folderRenameDraft.trim()
-    if (!folder) {
-      cancelFolderRename()
-      return
-    }
-    if (!trimmed) {
-      setFolderRenameDraft(folder.name)
-      setFolderRenameId(null)
-      return
-    }
-    if (trimmed === folder.name) {
-      setFolderRenameId(null)
-      return
-    }
-    const pk = folderPkFromClientId(folderRenameId)
-    if (pk == null) {
-      setFolderRenameId(null)
-      return
-    }
-    try {
-      setVaultError(null)
-      await patchFolderName(pk, trimmed)
-      dispatch({
-        type: 'RENAME_FOLDER',
-        folderId: folderRenameId,
-        name: trimmed,
-      })
-      setFolderRenameId(null)
-      setFolderRenameDraft('')
-    } catch (e) {
-      setVaultError(
-        e instanceof Error ? e.message : 'Could not rename folder.',
-      )
-      setFolderRenameDraft(folder.name)
-      setFolderRenameId(null)
-    }
-  }, [folderRenameId, folderRenameDraft, dispatch, cancelFolderRename])
-
-  const onStartFolderRename = useCallback(
-    (folderId, name) => {
-      if (vaultLoading) return
-      setFolderRenameId(folderId)
-      setFolderRenameDraft(name)
-    },
-    [vaultLoading],
-  )
-
   const requestNoteTitleEdit = useCallback(
     (fileId, name) => {
       if (vaultLoading) return
@@ -296,60 +261,13 @@ function App({ onLogout = () => {}, username = '' }) {
     }
   }, [state.activeFileId, state.openTabs])
 
-  useEffect(() => {
-    function onKeyDown(e) {
-      if (deleteModal) return
-
-      const mod = e.metaKey || e.ctrlKey
-      if (!mod) return
-      const k = e.key.toLowerCase()
-      if (k === 'n') {
-        e.preventDefault()
-        if (quickOpenOpen) setQuickOpenOpen(false)
-        void handleNewNote()
-        return
-      }
-      if (k === 'o') {
-        e.preventDefault()
-        setQuickOpenOpen((open) => !open)
-        return
-      }
-      if (k === 'w') {
-        e.preventDefault()
-        if (quickOpenOpen) {
-          setQuickOpenOpen(false)
-          return
-        }
-        closeEditorTab()
-        return
-      }
-    }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [deleteModal, quickOpenOpen, handleNewNote, closeEditorTab])
-
-  const activeFile = state.activeFileId
-    ? findFile(state.vault, state.activeFileId)
-    : null
-
-  useEffect(() => {
-    if (!folderRenameId) return undefined
-    const raf = window.requestAnimationFrame(() => {
-      const el = folderRenameInputRef.current
-      if (el) {
-        el.focus()
-        el.select()
-      }
-    })
-    return () => window.cancelAnimationFrame(raf)
-  }, [folderRenameId])
-
-  useEffect(() => {
-    if (!state.activeFileId) return
-    setFocusedFolderId(null)
-    setFolderRenameId(null)
-    setFolderRenameDraft('')
-  }, [state.activeFileId])
+  useVaultKeyboardShortcuts({
+    deleteModal,
+    quickOpenOpen,
+    setQuickOpenOpen,
+    handleNewNote,
+    closeEditorTab,
+  })
 
   const renameActiveNote = useCallback(
     async (fileId, trimmed) => {
@@ -365,56 +283,6 @@ function App({ onLogout = () => {}, username = '' }) {
   const onRenameNoteError = useCallback((message) => {
     setVaultError(message)
   }, [])
-
-  useEffect(() => {
-    if (state.activeFileId === prevActiveFileIdRef.current) return
-    prevActiveFileIdRef.current = state.activeFileId
-    const fid = state.activeFileId
-    if (!fid || !String(fid).startsWith('n-')) return
-    const f = findFile(state.vault, fid)
-    if (f) lastSavedBodyRef.current[fid] = f.content
-  }, [state.activeFileId, state.vault])
-
-  useEffect(() => {
-    const fileId = state.activeFileId
-    if (!fileId || !String(fileId).startsWith('n-')) return undefined
-    const pk = notePkFromClientId(fileId)
-    if (pk == null) return undefined
-    const savedRef = lastSavedBodyRef
-    const t = setTimeout(() => {
-      const file = findFile(vaultRef.current, fileId)
-      if (!file || file.type !== 'file') return
-      if (savedRef.current[fileId] === file.content) return
-      void patchNoteBody(pk, file.content)
-        .then(() => {
-          savedRef.current[fileId] = file.content
-        })
-        .catch((e) => {
-          setVaultError(
-            e instanceof Error ? e.message : 'Failed to save note.',
-          )
-        })
-    }, 600)
-    return () => {
-      clearTimeout(t)
-      const file = findFile(vaultRef.current, fileId)
-      if (
-        file &&
-        file.type === 'file' &&
-        savedRef.current[fileId] !== file.content
-      ) {
-        void patchNoteBody(pk, file.content)
-          .then(() => {
-            savedRef.current[fileId] = file.content
-          })
-          .catch((e) => {
-            setVaultError(
-              e instanceof Error ? e.message : 'Failed to save note.',
-            )
-          })
-      }
-    }
-  }, [state.activeFileId, activeFile?.content])
 
   return (
     <div className="app-obsidian">

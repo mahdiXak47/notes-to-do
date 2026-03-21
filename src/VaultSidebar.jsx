@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { apiUrl } from './auth.js'
-import './VaultSidebar.css'
+import './components/vault/VaultSidebar.css'
 import {
   findBreadcrumb,
   findFolderBreadcrumb,
