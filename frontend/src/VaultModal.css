@@ -1,0 +1,127 @@
+.obs-delete-modal {
+  z-index: 1055;
+}
+
+.obs-delete-modal-backdrop {
+  z-index: 1050;
+  background-color: rgba(0, 0, 80, 0.35);
+}
+
+.obs-delete-modal .modal-dialog {
+  max-width: 440px;
+}
+
+.obs-delete-modal-content {
+  background-color: #ffffff;
+  border: 1px solid rgba(0, 71, 171, 0.2);
+  border-radius: 12px;
+  box-shadow: 0 16px 48px rgba(0, 0, 80, 0.18);
+  overflow: hidden;
+}
+
+.obs-delete-modal-header {
+  border-bottom: 1px solid rgba(0, 71, 171, 0.12);
+  padding: 1.25rem 1.5rem 1rem;
+  background-color: #f8fcff;
+}
+
+.obs-delete-modal .modal-title {
+  color: #000080;
+  font-weight: 600;
+  font-size: 1.05rem;
+}
+
+.obs-delete-modal-close {
+  opacity: 0.65;
+}
+
+.obs-delete-modal-close:hover {
+  opacity: 1;
+}
+
+.obs-delete-modal-body {
+  padding: 1.35rem 1.5rem 1.5rem;
+  background-color: #ffffff;
+}
+
+.obs-delete-modal-lead {
+  color: #0d1b2a;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  margin: 0 0 0.75rem;
+}
+
+.obs-delete-modal-sub {
+  color: #5a7a95;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  margin: 0;
+}
+
+.obs-delete-modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 1rem;
+  padding: 1rem 1.5rem 1.25rem;
+  border-top: 1px solid rgba(0, 71, 171, 0.1);
+  background-color: #f0f8ff;
+}
+
+.obs-delete-modal-check .form-check-input {
+  width: 1rem;
+  height: 1rem;
+  margin-top: 0.15rem;
+  border-color: rgba(0, 71, 171, 0.35);
+  background-color: #fff;
+}
+
+.obs-delete-modal-check .form-check-input:checked {
+  background-color: #0047ab;
+  border-color: #0047ab;
+}
+
+.obs-delete-modal-check .form-check-input:focus {
+  box-shadow: 0 0 0 2px rgba(130, 200, 229, 0.45);
+}
+
+.obs-delete-modal-check .form-check-label {
+  color: #3d5d78;
+  font-size: 0.8125rem;
+  padding-left: 0.25rem;
+  cursor: pointer;
+}
+
+.obs-delete-modal-actions {
+  margin-left: auto;
+}
+
+.obs-delete-modal-btn-danger {
+  border-radius: 8px;
+  padding: 0.5rem 1.15rem;
+  font-weight: 500;
+  font-size: 0.875rem;
+  border: none;
+  background-color: #e53935;
+}
+
+.obs-delete-modal-btn-danger:hover {
+  background-color: #f44336;
+}
+
+.obs-delete-modal-btn-cancel {
+  border-radius: 8px;
+  padding: 0.5rem 1.15rem;
+  font-weight: 500;
+  font-size: 0.875rem;
+  background-color: #e2eef8;
+  border: 1px solid rgba(0, 71, 171, 0.2);
+  color: #0d1b2a;
+}
+
+.obs-delete-modal-btn-cancel:hover {
+  background-color: #d4e4f4;
+  border-color: rgba(0, 71, 171, 0.3);
+  color: #000080;
+}
