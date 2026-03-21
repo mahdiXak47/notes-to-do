@@ -3,6 +3,54 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import './MarkdownEditor.css'
 
+function withDirAuto(Tag) {
+  return function MarkdownDirAuto(props) {
+    const { node: _node, children, ...rest } = props
+    return (
+      <Tag dir="auto" {...rest}>
+        {children}
+      </Tag>
+    )
+  }
+}
+
+function MarkdownPre(props) {
+  const { node: _node, children, ...rest } = props
+  return (
+    <pre dir="ltr" {...rest}>
+      {children}
+    </pre>
+  )
+}
+
+function MarkdownCode(props) {
+  const { inline, node: _node, children, ...rest } = props
+  if (inline) {
+    return (
+      <code dir="ltr" {...rest}>
+        {children}
+      </code>
+    )
+  }
+  return <code {...rest}>{children}</code>
+}
+
+const MARKDOWN_BIDI_COMPONENTS = {
+  p: withDirAuto('p'),
+  h1: withDirAuto('h1'),
+  h2: withDirAuto('h2'),
+  h3: withDirAuto('h3'),
+  h4: withDirAuto('h4'),
+  h5: withDirAuto('h5'),
+  h6: withDirAuto('h6'),
+  li: withDirAuto('li'),
+  blockquote: withDirAuto('blockquote'),
+  td: withDirAuto('td'),
+  th: withDirAuto('th'),
+  pre: MarkdownPre,
+  code: MarkdownCode,
+}
+
 const EDITOR_SPLIT_STORAGE_KEY = 'notes_editor_split_pct'
 const EDITOR_SPLIT_MIN = 18
 const EDITOR_SPLIT_MAX = 82
@@ -135,7 +183,10 @@ export function MarkdownEditor({ file, dispatch }) {
         >
           <div className="md-preview">
             {file.content.trim() ? (
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                components={MARKDOWN_BIDI_COMPONENTS}
+              >
                 {file.content}
               </ReactMarkdown>
             ) : (

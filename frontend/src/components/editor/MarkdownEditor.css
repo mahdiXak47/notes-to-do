@@ -20,6 +20,9 @@
   font-size: 0.875rem;
   line-height: 1.5;
   padding: 0.75rem 1rem;
+  /* Per-line direction from first strong character (e.g. Persian vs Latin). */
+  unicode-bidi: plaintext;
+  text-align: start;
 }
 
 .md-editor:focus {
@@ -111,6 +114,20 @@
   font-size: 0.9375rem;
   line-height: 1.6;
   color: #1a3044;
+}
+
+.md-preview p,
+.md-preview h1,
+.md-preview h2,
+.md-preview h3,
+.md-preview h4,
+.md-preview h5,
+.md-preview h6,
+.md-preview li,
+.md-preview blockquote,
+.md-preview td,
+.md-preview th {
+  text-align: start;
 }
 
 .md-preview-empty {
