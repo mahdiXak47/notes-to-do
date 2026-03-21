@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import './components/modals/VaultModal.css'
+import './VaultModal.css'
 
 export function DeleteConfirmModal({
   target,

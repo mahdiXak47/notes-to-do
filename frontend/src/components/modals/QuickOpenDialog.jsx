@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import './components/modals/QuickOpenDialog.css'
+import './QuickOpenDialog.css'
 
 function flattenVaultFiles(nodes, prefix = []) {
   const out = []

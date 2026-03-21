@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { apiUrl } from './auth.js'
-import './components/vault/VaultSidebar.css'
+import { apiUrl } from '../../auth.js'
+import './VaultSidebar.css'
 import {
   findBreadcrumb,
   findFolderBreadcrumb,
   splitDirAndFileName,
-} from './vaultTreePaths.js'
+} from '../../vaultTreePaths.js'
 
 const SIDEBAR_COLLAPSED_KEY = 'notes_sidebar_collapsed'
 

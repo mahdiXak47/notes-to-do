@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react'
-import App from './App.jsx'
+import App from '../../app/App.jsx'
 import Login from './Login.jsx'
 import {
   clearStoredToken,
   ensureSession,
   getStoredUsername,
-} from './auth.js'
-import './components/auth/Login.css'
+} from '../../auth.js'
+import './Login.css'
 
 export default function AuthGate() {
   const [phase, setPhase] = useState('checking')

@@ -6,14 +6,14 @@ import {
   useRef,
   useState,
 } from 'react'
-import './app/App.css'
-import { DeleteConfirmModal } from './DeleteConfirmModal.jsx'
-import { EditorEmptyState } from './EditorEmptyState.jsx'
-import { MarkdownEditor } from './MarkdownEditor.jsx'
-import { QuickOpenDialog } from './QuickOpenDialog.jsx'
-import { SettingsModal } from './SettingsModal.jsx'
-import { VaultNavbar } from './VaultNavbar.jsx'
-import { VaultSidebar } from './VaultSidebar.jsx'
+import './App.css'
+import { DeleteConfirmModal } from '../components/modals/DeleteConfirmModal.jsx'
+import { EditorEmptyState } from '../components/editor/EditorEmptyState.jsx'
+import { MarkdownEditor } from '../components/editor/MarkdownEditor.jsx'
+import { QuickOpenDialog } from '../components/modals/QuickOpenDialog.jsx'
+import { SettingsModal } from '../components/modals/SettingsModal.jsx'
+import { VaultNavbar } from '../components/vault/VaultNavbar.jsx'
+import { VaultSidebar } from '../components/vault/VaultSidebar.jsx'
 import {
   collectExpandedByFolderId,
   createFolder,
@@ -25,18 +25,18 @@ import {
   normalizeTreeFromApi,
   notePkFromClientId,
   patchNoteName,
-} from './vaultApi.js'
-import { initialVaultState, vaultReducer } from './vaultReducer.js'
+} from '../vaultApi.js'
+import { initialVaultState, vaultReducer } from '../vaultReducer.js'
 import {
   collectPinnedFileNodes,
   filterTree,
   sortTree,
   stripPinnedFilesFromNodes,
-} from './vaultTreeOps.js'
-import { findFile } from './vaultTreePaths.js'
-import { useFolderRename } from './hooks/useFolderRename.js'
-import { useNoteAutosave } from './hooks/useNoteAutosave.js'
-import { useVaultKeyboardShortcuts } from './hooks/useVaultKeyboardShortcuts.js'
+} from '../vaultTreeOps.js'
+import { findFile } from '../vaultTreePaths.js'
+import { useFolderRename } from '../hooks/useFolderRename.js'
+import { useNoteAutosave } from '../hooks/useNoteAutosave.js'
+import { useVaultKeyboardShortcuts } from '../hooks/useVaultKeyboardShortcuts.js'
 
 const SKIP_DELETE_CONFIRM_KEY = 'notes_skip_delete_confirm'
 
