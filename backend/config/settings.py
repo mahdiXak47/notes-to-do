@@ -2,6 +2,8 @@ import os
 from datetime import timedelta
 from pathlib import Path
 
+from django.core.exceptions import ImproperlyConfigured
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = os.environ.get(
@@ -17,10 +19,6 @@ ALLOWED_HOSTS = ['0.0.0.0', 'localhost', '127.0.0.1', 'notestodo-core.darkube.ap
 CSRF_TRUSTED_ORIGINS = [
     'https://notestodo-core.darkube.app',
     'https://notes-to-do.darkube.app',
-    'http://127.0.0.1:8000',
-    'http://localhost:8000',
-    'http://127.0.0.1:5173',
-    'http://localhost:5173',
 ]
 _extra_csrf = os.environ.get('DJANGO_CSRF_TRUSTED_ORIGINS', '').strip()
 if _extra_csrf:
@@ -77,12 +75,54 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+
+def _db_host_and_port(host_with_port: str) -> tuple[str, str]:
+    """Split host:port for Postgres; default port 5432 when omitted."""
+    raw = (host_with_port or '').strip()
+    if not raw:
+        return 'localhost', '5432'
+    if ':' in raw:
+        host, _, maybe_port = raw.rpartition(':')
+        if maybe_port.isdigit():
+            return host, maybe_port
+    return raw, '5432'
+
+
+_DB_TO_USE = os.environ.get('DB_TO_USE', 'dev').strip().lower()
+_USE_POSTGRES = _DB_TO_USE in ('production', 'postgres', 'prod')
+
+if _USE_POSTGRES:
+    _pg_env = {
+        'DB_NAME': os.environ.get('DB_NAME'),
+        'DB_USER': os.environ.get('DB_USER'),
+        'DB_PASSWORD': os.environ.get('DB_PASSWORD'),
+        'DB_HOST': os.environ.get('DB_HOST'),
     }
-}
+    _missing_pg = [k for k, v in _pg_env.items() if not (v and str(v).strip())]
+    if _missing_pg:
+        raise ImproperlyConfigured(
+            'When DB_TO_USE selects PostgreSQL (production, prod, or postgres), '
+            'set these environment variables to non-empty values: '
+            + ', '.join(_missing_pg) + '.'
+        )
+    _pg_host, _pg_port = _db_host_and_port(_pg_env['DB_HOST'])
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': _pg_env['DB_NAME'].strip(),
+            'USER': _pg_env['DB_USER'].strip(),
+            'PASSWORD': _pg_env['DB_PASSWORD'],
+            'HOST': _pg_host,
+            'PORT': _pg_port,
+        }
+    }
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
 
 
 # Password validation

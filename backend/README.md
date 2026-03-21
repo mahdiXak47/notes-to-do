@@ -8,9 +8,10 @@ Runtime runs **Gunicorn** on port **8000**.
 
 **Entrypoint** (`docker-entrypoint.sh`):
 
-1. **`python manage.py migrate --noinput`**
-2. **`python ensure_superuser.py`** (only if `DJANGO_SUPERUSER_PASSWORD` is set; see below)
-3. Start **Gunicorn** (default CMD)
+1. **`python manage.py check`** (includes a PostgreSQL connectivity check when `DB_TO_USE` selects Postgres; exits non-zero on failure).
+2. **`python manage.py migrate --noinput`**
+3. **`python ensure_superuser.py`** (only if `DJANGO_SUPERUSER_PASSWORD` is set; see below)
+4. Start **Gunicorn** (default CMD)
 
 Build and run (example):
 
@@ -50,7 +51,25 @@ If the user already exists, the script does nothing.
 
 **`ALLOWED_HOSTS`** in `config/settings.py` is fixed to **`0.0.0.0`**, **`localhost`**, and **`127.0.0.1`**. If you deploy behind a real hostname (e.g. `notes-to-do.darkube.app`), extend that list or add optional env-based hosts in settings so Django accepts the **`Host`** header from your ingress.
 
-The app uses **SQLite** by default (`db.sqlite3` in the project directory). Use **one writable replica** or a **persistent volume**; multiple pods sharing one SQLite file is not supported. For several replicas, use PostgreSQL or MySQL and point **`DATABASES`** in settings accordingly.
+### Database: `DB_TO_USE` and PostgreSQL
+
+| Variable | Values | Purpose |
+|----------|--------|---------|
+| `DB_TO_USE` | `dev` (default) | SQLite at `db.sqlite3`. |
+| `DB_TO_USE` | `production`, `prod`, or `postgres` | PostgreSQL; requires the variables below. |
+
+When using PostgreSQL (e.g. Kubernetes service `notes-todo-db.mahdixak.svc:5432`):
+
+| Variable | Example | Purpose |
+|----------|---------|---------|
+| `DB_USER` | — | Database user. |
+| `DB_PASSWORD` | — | Database password. |
+| `DB_HOST` | `notes-todo-db.mahdixak.svc:5432` | Required and non-empty. Host and port in one value (`host:port`). Port defaults to **5432** if you omit `:port`. |
+| `DB_NAME` | — | Database name. |
+
+If any of **`DB_NAME`**, **`DB_USER`**, **`DB_PASSWORD`**, or **`DB_HOST`** is missing or blank when Postgres is selected, Django raises **`ImproperlyConfigured`** at startup. If the server is unreachable or credentials are wrong, **`python manage.py check`** reports **`config.E001`** with the underlying driver error (the container entrypoint runs **`check`** before **`migrate`**).
+
+Run **`python manage.py migrate`** against the new database so Django creates all tables (see below). Use **one writable SQLite file** or Postgres; multiple pods must use Postgres, not a shared SQLite file.
 
 ---
 
