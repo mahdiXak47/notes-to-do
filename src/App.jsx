@@ -9,6 +9,7 @@ import {
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import './App.css'
+import { apiUrl } from './auth.js'
 import {
   collectExpandedByFolderId,
   createFolder,
@@ -26,9 +27,18 @@ import {
 } from './vaultApi.js'
 
 const SKIP_DELETE_CONFIRM_KEY = 'notes_skip_delete_confirm'
+const SIDEBAR_COLLAPSED_KEY = 'notes_sidebar_collapsed'
 const EDITOR_SPLIT_STORAGE_KEY = 'notes_editor_split_pct'
 const EDITOR_SPLIT_MIN = 18
 const EDITOR_SPLIT_MAX = 82
+
+function readSidebarCollapsed() {
+  try {
+    return localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === '1'
+  } catch {
+    return false
+  }
+}
 
 function readStoredEditorSplitPct() {
   try {
@@ -621,6 +631,73 @@ function TreeRows({
   return rows
 }
 
+function SidebarAccountMenu({
+  menuWrapRef,
+  railPopover,
+  footerMenuOpen,
+  setFooterMenuOpen,
+  setSettingsModalOpen,
+  onLogout,
+}) {
+  return (
+    <div className="sidebar-footer-menu-wrap" ref={menuWrapRef}>
+      <button
+        type="button"
+        className="sidebar-footer-gear"
+        aria-expanded={footerMenuOpen}
+        aria-haspopup="menu"
+        aria-controls="sidebar-footer-settings-menu"
+        aria-label="Account menu"
+        onClick={() => setFooterMenuOpen((v) => !v)}
+      >
+        <i className="bi bi-gear" aria-hidden />
+      </button>
+      {footerMenuOpen ? (
+        <div
+          id="sidebar-footer-settings-menu"
+          className={`sidebar-footer-popover${railPopover ? ' sidebar-footer-popover--rail' : ''}`}
+          role="menu"
+        >
+          <button
+            type="button"
+            role="menuitem"
+            className="sidebar-footer-popover-item"
+            onClick={() => {
+              setFooterMenuOpen(false)
+              setSettingsModalOpen(true)
+            }}
+          >
+            Settings
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            className="sidebar-footer-popover-item"
+            onClick={() => {
+              setFooterMenuOpen(false)
+              onLogout()
+            }}
+          >
+            Sign out
+          </button>
+          <div className="sidebar-footer-popover-sep" role="separator" />
+          <button
+            type="button"
+            role="menuitem"
+            className="sidebar-footer-popover-item"
+            onClick={() => {
+              setFooterMenuOpen(false)
+              window.open(apiUrl('/admin/'), '_blank', 'noopener,noreferrer')
+            }}
+          >
+            Manage vaults
+          </button>
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
 function App({ onLogout = () => {}, username = '' }) {
   const [state, dispatch] = useReducer(reducer, initialState)
   const [deleteModal, setDeleteModal] = useState(null)
@@ -652,7 +729,21 @@ function App({ onLogout = () => {}, username = '' }) {
     readStoredEditorSplitPct,
   )
   const [editorSplitDragging, setEditorSplitDragging] = useState(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(readSidebarCollapsed)
+  const [footerMenuOpen, setFooterMenuOpen] = useState(false)
+  const [settingsModalOpen, setSettingsModalOpen] = useState(false)
+  const sidebarFooterRef = useRef(null)
+  const collapsedAccountMenuRef = useRef(null)
   const modLabel = useMemo(() => modKeyLabel(), [])
+
+  const toggleSidebarCollapsed = useCallback((collapsed) => {
+    setSidebarCollapsed(collapsed)
+    try {
+      localStorage.setItem(SIDEBAR_COLLAPSED_KEY, collapsed ? '1' : '0')
+    } catch {
+      /* ignore. */
+    }
+  }, [])
 
   const onEditorSplitPointerDown = useCallback((e) => {
     if (e.button !== 0) return
@@ -757,6 +848,38 @@ function App({ onLogout = () => {}, username = '' }) {
       document.removeEventListener('keydown', onKeyDown)
     }
   }, [deleteModal])
+
+  useEffect(() => {
+    if (!footerMenuOpen) return undefined
+    function onPointerDown(e) {
+      if (sidebarFooterRef.current?.contains(e.target)) return
+      if (collapsedAccountMenuRef.current?.contains(e.target)) return
+      setFooterMenuOpen(false)
+    }
+    function onKeyDown(e) {
+      if (e.key === 'Escape') setFooterMenuOpen(false)
+    }
+    document.addEventListener('mousedown', onPointerDown)
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown)
+      document.removeEventListener('keydown', onKeyDown)
+    }
+  }, [footerMenuOpen])
+
+  useEffect(() => {
+    if (!settingsModalOpen) return undefined
+    function onKeyDown(e) {
+      if (e.key === 'Escape') setSettingsModalOpen(false)
+    }
+    const prevOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.body.style.overflow = prevOverflow
+      document.removeEventListener('keydown', onKeyDown)
+    }
+  }, [settingsModalOpen])
 
   async function runDelete(target) {
     setVaultError(null)
@@ -1190,31 +1313,48 @@ function App({ onLogout = () => {}, username = '' }) {
   return (
     <div className="app-obsidian">
       <div className="app-body">
-        <aside className="sidebar" aria-label="Vault explorer">
-          <div className="sidebar-toolbar">
+        <aside
+          className={`sidebar${sidebarCollapsed ? ' sidebar--collapsed' : ''}`}
+          aria-label="Vault explorer"
+          aria-hidden={sidebarCollapsed}
+        >
+          {!sidebarCollapsed ? (
+            <>
+          <div className="sidebar-toolbar sidebar-toolbar--top">
+            <div className="sidebar-toolbar-cluster">
+              <button
+                type="button"
+                className="btn-icon"
+                title="Files"
+                aria-label="Files"
+              >
+                <i className="bi bi-folder2" aria-hidden />
+              </button>
+              <button
+                type="button"
+                className="btn-icon"
+                title="Search"
+                aria-label="Search"
+              >
+                <i className="bi bi-search" aria-hidden />
+              </button>
+              <button
+                type="button"
+                className="btn-icon"
+                title="Bookmarks"
+                aria-label="Bookmarks"
+              >
+                <i className="bi bi-star" aria-hidden />
+              </button>
+            </div>
             <button
               type="button"
-              className="btn-icon"
-              title="Files"
-              aria-label="Files"
+              className="btn-icon sidebar-collapse-btn"
+              title="Collapse sidebar"
+              aria-label="Collapse vault sidebar"
+              onClick={() => toggleSidebarCollapsed(true)}
             >
-              <i className="bi bi-folder2" aria-hidden />
-            </button>
-            <button
-              type="button"
-              className="btn-icon"
-              title="Search"
-              aria-label="Search"
-            >
-              <i className="bi bi-search" aria-hidden />
-            </button>
-            <button
-              type="button"
-              className="btn-icon"
-              title="Bookmarks"
-              aria-label="Bookmarks"
-            >
-              <i className="bi bi-star" aria-hidden />
+              <i className="bi bi-layout-sidebar-inset" aria-hidden />
             </button>
           </div>
           <div className="sidebar-toolbar">
@@ -1346,19 +1486,44 @@ function App({ onLogout = () => {}, username = '' }) {
               />
             ) : null}
           </div>
-          <div className="sidebar-footer">
+          <div className="sidebar-footer" ref={sidebarFooterRef}>
             <div className="sidebar-footer-user text-truncate" title={username}>
               {username}
             </div>
+            <SidebarAccountMenu
+              footerMenuOpen={footerMenuOpen}
+              setFooterMenuOpen={setFooterMenuOpen}
+              setSettingsModalOpen={setSettingsModalOpen}
+              onLogout={onLogout}
+            />
+          </div>
+            </>
+          ) : null}
+        </aside>
+
+        {sidebarCollapsed ? (
+          <div className="sidebar-expand-rail">
             <button
               type="button"
-              className="sidebar-footer-logout"
-              onClick={onLogout}
+              className="sidebar-expand-rail-btn"
+              title="Show sidebar"
+              aria-label="Show vault sidebar"
+              onClick={() => toggleSidebarCollapsed(false)}
             >
-              Sign out
+              <i className="bi bi-layout-sidebar-inset-reverse" aria-hidden />
             </button>
+            <div className="sidebar-expand-rail-account">
+              <SidebarAccountMenu
+                menuWrapRef={collapsedAccountMenuRef}
+                railPopover
+                footerMenuOpen={footerMenuOpen}
+                setFooterMenuOpen={setFooterMenuOpen}
+                setSettingsModalOpen={setSettingsModalOpen}
+                onLogout={onLogout}
+              />
+            </div>
           </div>
-        </aside>
+        ) : null}
 
         <section className="editor-pane" aria-label="Editor">
           <div className="tab-bar" role="tablist">
@@ -1667,6 +1832,53 @@ function App({ onLogout = () => {}, username = '' }) {
               </ul>
             </div>
           </div>
+        </>
+      ) : null}
+
+      {settingsModalOpen ? (
+        <>
+          <div
+            className="modal fade show d-block obs-delete-modal"
+            tabIndex={-1}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="settings-modal-title"
+          >
+            <div className="modal-dialog modal-dialog-centered" role="document">
+              <div className="modal-content obs-delete-modal-content text-dark">
+                <div className="modal-header obs-delete-modal-header">
+                  <h5 className="modal-title" id="settings-modal-title">
+                    Settings
+                  </h5>
+                  <button
+                    type="button"
+                    className="btn-close obs-delete-modal-close"
+                    aria-label="Close"
+                    onClick={() => setSettingsModalOpen(false)}
+                  />
+                </div>
+                <div className="modal-body obs-delete-modal-body">
+                  <p className="obs-delete-modal-lead m-0">
+                    Signed in as <strong>{username}</strong>.
+                  </p>
+                </div>
+                <div className="modal-footer obs-delete-modal-footer justify-content-end">
+                  <button
+                    type="button"
+                    className="btn obs-delete-modal-btn-cancel"
+                    onClick={() => setSettingsModalOpen(false)}
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div
+            className="modal-backdrop fade show obs-delete-modal-backdrop"
+            role="presentation"
+            onClick={() => setSettingsModalOpen(false)}
+          />
         </>
       ) : null}
 
