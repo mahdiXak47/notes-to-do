@@ -9,7 +9,7 @@ import {
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import './App.css'
-import { apiUrl } from './auth.js'
+import { VaultSidebar } from './VaultSidebar.jsx'
 import {
   collectExpandedByFolderId,
   createFolder,
@@ -25,20 +25,12 @@ import {
   patchNoteName,
   pruneStateForVaultTree,
 } from './vaultApi.js'
+import { findBreadcrumb, pathJoined } from './vaultTreePaths.js'
 
 const SKIP_DELETE_CONFIRM_KEY = 'notes_skip_delete_confirm'
-const SIDEBAR_COLLAPSED_KEY = 'notes_sidebar_collapsed'
 const EDITOR_SPLIT_STORAGE_KEY = 'notes_editor_split_pct'
 const EDITOR_SPLIT_MIN = 18
 const EDITOR_SPLIT_MAX = 82
-
-function readSidebarCollapsed() {
-  try {
-    return localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === '1'
-  } catch {
-    return false
-  }
-}
 
 function readStoredEditorSplitPct() {
   try {
@@ -114,58 +106,6 @@ function flattenVaultFiles(nodes, prefix = []) {
 function modKeyLabel() {
   if (typeof navigator === 'undefined') return 'Ctrl'
   return /Mac|iPhone|iPod/i.test(navigator.platform || '') ? '⌘' : 'Ctrl'
-}
-
-function findBreadcrumb(nodes, fileId, acc = []) {
-  for (const n of nodes) {
-    if (n.type === 'file' && n.id === fileId) return [...acc, n.name]
-    if (n.type === 'folder') {
-      const p = findBreadcrumb(n.children, fileId, [...acc, n.name])
-      if (p) return p
-    }
-  }
-  return null
-}
-
-function findFolderBreadcrumb(nodes, folderId, acc = []) {
-  for (const n of nodes) {
-    if (n.type === 'folder' && n.id === folderId) return [...acc, n.name]
-    if (n.type === 'folder') {
-      const p = findFolderBreadcrumb(n.children, folderId, [...acc, n.name])
-      if (p) return p
-    }
-  }
-  return null
-}
-
-function pathJoined(segments) {
-  if (!segments?.length) return ''
-  return segments.join('/')
-}
-
-function splitDirAndFileName(segments, fallbackName) {
-  if (!segments?.length) return { dir: '', name: fallbackName }
-  if (segments.length === 1) return { dir: '', name: segments[0] }
-  return {
-    dir: segments.slice(0, -1).join('/'),
-    name: segments[segments.length - 1],
-  }
-}
-
-function TreePathLabel({ segments, fallbackName }) {
-  const { dir, name } = splitDirAndFileName(segments, fallbackName)
-  const title = dir ? `${dir}/${name}` : name
-  return (
-    <span className="tree-label text-truncate tree-path-label" title={title}>
-      {dir ? (
-        <>
-          <span className="tree-path-dir">{dir}</span>
-          <span className="tree-path-sep">/</span>
-        </>
-      ) : null}
-      <span className="tree-path-file">{name}</span>
-    </span>
-  )
 }
 
 function collectPinnedFileNodes(vault, pinnedIds) {
@@ -361,343 +301,6 @@ function reducer(state, action) {
   }
 }
 
-function FileTreeRow({
-  node,
-  vault,
-  pinnedIds,
-  activeFileId,
-  dispatch,
-  onRequestDelete,
-  depth,
-  alwaysShowPath,
-  vaultLoading,
-  onRequestNoteTitleEdit,
-}) {
-  const pathSegs = findBreadcrumb(vault, node.id)
-  const pinned = Boolean(pinnedIds[node.id])
-  const usePath = Boolean(
-    alwaysShowPath || (pinned && pathSegs?.length),
-  )
-  return (
-    <div style={{ paddingLeft: depth * 0.65 + 'rem' }}>
-      <div
-        className={`tree-row-wrap ${activeFileId === node.id ? 'is-active' : ''}`}
-      >
-        <button
-          type="button"
-          className="tree-row tree-row-main"
-          draggable={false}
-          title="Click to open · Double-click to rename"
-          onClick={() => dispatch({ type: 'OPEN_FILE', id: node.id })}
-          onDoubleClick={(e) => {
-            e.preventDefault()
-            e.stopPropagation()
-            if (vaultLoading) return
-            onRequestNoteTitleEdit(node.id, node.name)
-          }}
-        >
-          <span className="tree-chevron spacer" aria-hidden>
-            <i className="bi bi-chevron-right" />
-          </span>
-          <TreePathLabel
-            segments={usePath ? pathSegs : null}
-            fallbackName={node.name}
-          />
-        </button>
-        <div className="tree-row-actions">
-          <button
-            type="button"
-            className={`tree-row-action-btn ${pinned ? 'is-active' : ''}`}
-            title={pinned ? 'Unpin' : 'Pin path'}
-            aria-label={pinned ? 'Unpin file' : 'Pin file path'}
-            draggable={false}
-            onClick={(e) => {
-              e.stopPropagation()
-              dispatch({ type: 'TOGGLE_PIN', id: node.id })
-            }}
-          >
-            <i
-              className={pinned ? 'bi bi-pin-fill' : 'bi bi-pin-angle'}
-              aria-hidden
-            />
-          </button>
-          <button
-            type="button"
-            className="tree-row-action-btn tree-row-action-danger"
-            title="Delete file"
-            aria-label={`Delete file ${node.name}`}
-            draggable={false}
-            onClick={(e) => {
-              e.stopPropagation()
-              onRequestDelete({
-                kind: 'file',
-                id: node.id,
-                name: node.name,
-              })
-            }}
-          >
-            <i className="bi bi-trash3" aria-hidden />
-          </button>
-        </div>
-        {node.meta ? <span className="tree-meta">{node.meta}</span> : null}
-      </div>
-    </div>
-  )
-}
-
-function TreeRows({
-  nodes,
-  depth,
-  activeFileId,
-  dispatch,
-  expandedOverrides,
-  vault,
-  pinnedIds,
-  onRequestDelete,
-  focusedFolderId,
-  onFolderRowFocus,
-  folderRenameId,
-  folderRenameDraft,
-  onFolderRenameDraftChange,
-  onStartFolderRename,
-  onCommitFolderRename,
-  onCancelFolderRename,
-  folderRenameInputRef,
-  vaultLoading,
-  onRequestNoteTitleEdit,
-}) {
-  const rows = []
-  for (const node of nodes) {
-    if (node.type === 'folder') {
-      const expanded = expandedOverrides ? true : node.expanded
-      const folderSegs = findFolderBreadcrumb(vault, node.id)
-      const pinned = Boolean(pinnedIds[node.id])
-      const usePath = Boolean(pinned && folderSegs?.length)
-      const isRenaming = folderRenameId === node.id
-      rows.push(
-        <div key={node.id} style={{ paddingLeft: depth * 0.65 + 'rem' }}>
-          <div
-            className={`tree-row-wrap ${focusedFolderId === node.id ? 'is-folder-focused' : ''}`}
-          >
-            <button
-              type="button"
-              className="tree-row tree-row-chevron-btn"
-              draggable={false}
-              title={expanded ? 'Collapse folder' : 'Expand folder'}
-              aria-expanded={expanded}
-              aria-label={`${expanded ? 'Collapse' : 'Expand'} folder ${node.name}`}
-              onClick={(e) => {
-                e.stopPropagation()
-                onFolderRowFocus(node.id)
-                dispatch({ type: 'TOGGLE_FOLDER', folderId: node.id })
-              }}
-              onKeyDown={(e) => {
-                if (e.key !== 'Enter' || vaultLoading || isRenaming) return
-                e.preventDefault()
-                onStartFolderRename(node.id, node.name)
-              }}
-            >
-              <span className="tree-chevron" aria-hidden>
-                <i
-                  className={`bi bi-chevron-${expanded ? 'down' : 'right'}`}
-                />
-              </span>
-            </button>
-            {isRenaming ? (
-              <input
-                ref={folderRenameInputRef}
-                type="text"
-                className="tree-folder-rename-input"
-                draggable={false}
-                value={folderRenameDraft}
-                onChange={(e) => onFolderRenameDraftChange(e.target.value)}
-                onBlur={() => void onCommitFolderRename()}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault()
-                    void onCommitFolderRename()
-                  }
-                  if (e.key === 'Escape') {
-                    e.preventDefault()
-                    onCancelFolderRename()
-                  }
-                }}
-                aria-label="Folder name"
-                maxLength={255}
-                onClick={(e) => e.stopPropagation()}
-              />
-            ) : (
-              <button
-                type="button"
-                className="tree-row tree-row-main tree-row-folder-label"
-                draggable={false}
-                title="Double-click or press Enter to rename"
-                onClick={() => onFolderRowFocus(node.id)}
-                onDoubleClick={(e) => {
-                  e.preventDefault()
-                  if (!vaultLoading) onStartFolderRename(node.id, node.name)
-                }}
-                onKeyDown={(e) => {
-                  if (e.key !== 'Enter' || vaultLoading) return
-                  e.preventDefault()
-                  onStartFolderRename(node.id, node.name)
-                }}
-              >
-                <TreePathLabel
-                  segments={usePath ? folderSegs : null}
-                  fallbackName={node.name}
-                />
-              </button>
-            )}
-            <div className="tree-row-actions">
-              <button
-                type="button"
-                className={`tree-row-action-btn ${pinned ? 'is-active' : ''}`}
-                title={pinned ? 'Unpin' : 'Pin path'}
-                aria-label={pinned ? 'Unpin folder' : 'Pin folder path'}
-                draggable={false}
-                onClick={(e) => {
-                  e.stopPropagation()
-                  dispatch({ type: 'TOGGLE_PIN', id: node.id })
-                }}
-              >
-                <i
-                  className={pinned ? 'bi bi-pin-fill' : 'bi bi-pin-angle'}
-                  aria-hidden
-                />
-              </button>
-              <button
-                type="button"
-                className="tree-row-action-btn tree-row-action-danger"
-                title="Delete folder"
-                aria-label={`Delete folder ${node.name}`}
-                draggable={false}
-                onClick={(e) => {
-                  e.stopPropagation()
-                  onRequestDelete({
-                    kind: 'folder',
-                    id: node.id,
-                    name: node.name,
-                  })
-                }}
-              >
-                <i className="bi bi-trash3" aria-hidden />
-              </button>
-            </div>
-          </div>
-          {expanded && (
-            <TreeRows
-              nodes={node.children}
-              depth={depth + 1}
-              activeFileId={activeFileId}
-              dispatch={dispatch}
-              expandedOverrides={expandedOverrides}
-              vault={vault}
-              pinnedIds={pinnedIds}
-              onRequestDelete={onRequestDelete}
-              focusedFolderId={focusedFolderId}
-              onFolderRowFocus={onFolderRowFocus}
-              folderRenameId={folderRenameId}
-              folderRenameDraft={folderRenameDraft}
-              onFolderRenameDraftChange={onFolderRenameDraftChange}
-              onStartFolderRename={onStartFolderRename}
-              onCommitFolderRename={onCommitFolderRename}
-              onCancelFolderRename={onCancelFolderRename}
-              folderRenameInputRef={folderRenameInputRef}
-              vaultLoading={vaultLoading}
-              onRequestNoteTitleEdit={onRequestNoteTitleEdit}
-            />
-          )}
-        </div>,
-      )
-    } else {
-      rows.push(
-        <FileTreeRow
-          key={node.id}
-          node={node}
-          vault={vault}
-          pinnedIds={pinnedIds}
-          activeFileId={activeFileId}
-          dispatch={dispatch}
-          onRequestDelete={onRequestDelete}
-          depth={depth}
-          alwaysShowPath={false}
-          vaultLoading={vaultLoading}
-          onRequestNoteTitleEdit={onRequestNoteTitleEdit}
-        />,
-      )
-    }
-  }
-  return rows
-}
-
-function SidebarAccountMenu({
-  menuWrapRef,
-  railPopover,
-  footerMenuOpen,
-  setFooterMenuOpen,
-  setSettingsModalOpen,
-  onLogout,
-}) {
-  return (
-    <div className="sidebar-footer-menu-wrap" ref={menuWrapRef}>
-      <button
-        type="button"
-        className="sidebar-footer-gear"
-        aria-expanded={footerMenuOpen}
-        aria-haspopup="menu"
-        aria-controls="sidebar-footer-settings-menu"
-        aria-label="Account menu"
-        onClick={() => setFooterMenuOpen((v) => !v)}
-      >
-        <i className="bi bi-gear" aria-hidden />
-      </button>
-      {footerMenuOpen ? (
-        <div
-          id="sidebar-footer-settings-menu"
-          className={`sidebar-footer-popover${railPopover ? ' sidebar-footer-popover--rail' : ''}`}
-          role="menu"
-        >
-          <button
-            type="button"
-            role="menuitem"
-            className="sidebar-footer-popover-item"
-            onClick={() => {
-              setFooterMenuOpen(false)
-              setSettingsModalOpen(true)
-            }}
-          >
-            Settings
-          </button>
-          <button
-            type="button"
-            role="menuitem"
-            className="sidebar-footer-popover-item"
-            onClick={() => {
-              setFooterMenuOpen(false)
-              onLogout()
-            }}
-          >
-            Sign out
-          </button>
-          <div className="sidebar-footer-popover-sep" role="separator" />
-          <button
-            type="button"
-            role="menuitem"
-            className="sidebar-footer-popover-item"
-            onClick={() => {
-              setFooterMenuOpen(false)
-              window.open(apiUrl('/admin/'), '_blank', 'noopener,noreferrer')
-            }}
-          >
-            Manage vaults
-          </button>
-        </div>
-      ) : null}
-    </div>
-  )
-}
-
 function App({ onLogout = () => {}, username = '' }) {
   const [state, dispatch] = useReducer(reducer, initialState)
   const [deleteModal, setDeleteModal] = useState(null)
@@ -729,21 +332,8 @@ function App({ onLogout = () => {}, username = '' }) {
     readStoredEditorSplitPct,
   )
   const [editorSplitDragging, setEditorSplitDragging] = useState(false)
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(readSidebarCollapsed)
-  const [footerMenuOpen, setFooterMenuOpen] = useState(false)
   const [settingsModalOpen, setSettingsModalOpen] = useState(false)
-  const sidebarFooterRef = useRef(null)
-  const collapsedAccountMenuRef = useRef(null)
   const modLabel = useMemo(() => modKeyLabel(), [])
-
-  const toggleSidebarCollapsed = useCallback((collapsed) => {
-    setSidebarCollapsed(collapsed)
-    try {
-      localStorage.setItem(SIDEBAR_COLLAPSED_KEY, collapsed ? '1' : '0')
-    } catch {
-      /* ignore. */
-    }
-  }, [])
 
   const onEditorSplitPointerDown = useCallback((e) => {
     if (e.button !== 0) return
@@ -848,24 +438,6 @@ function App({ onLogout = () => {}, username = '' }) {
       document.removeEventListener('keydown', onKeyDown)
     }
   }, [deleteModal])
-
-  useEffect(() => {
-    if (!footerMenuOpen) return undefined
-    function onPointerDown(e) {
-      if (sidebarFooterRef.current?.contains(e.target)) return
-      if (collapsedAccountMenuRef.current?.contains(e.target)) return
-      setFooterMenuOpen(false)
-    }
-    function onKeyDown(e) {
-      if (e.key === 'Escape') setFooterMenuOpen(false)
-    }
-    document.addEventListener('mousedown', onPointerDown)
-    document.addEventListener('keydown', onKeyDown)
-    return () => {
-      document.removeEventListener('mousedown', onPointerDown)
-      document.removeEventListener('keydown', onKeyDown)
-    }
-  }, [footerMenuOpen])
 
   useEffect(() => {
     if (!settingsModalOpen) return undefined
@@ -1313,217 +885,36 @@ function App({ onLogout = () => {}, username = '' }) {
   return (
     <div className="app-obsidian">
       <div className="app-body">
-        <aside
-          className={`sidebar${sidebarCollapsed ? ' sidebar--collapsed' : ''}`}
-          aria-label="Vault explorer"
-          aria-hidden={sidebarCollapsed}
-        >
-          {!sidebarCollapsed ? (
-            <>
-          <div className="sidebar-toolbar sidebar-toolbar--top">
-            <div className="sidebar-toolbar-cluster">
-              <button
-                type="button"
-                className="btn-icon"
-                title="Files"
-                aria-label="Files"
-              >
-                <i className="bi bi-folder2" aria-hidden />
-              </button>
-              <button
-                type="button"
-                className="btn-icon"
-                title="Search"
-                aria-label="Search"
-              >
-                <i className="bi bi-search" aria-hidden />
-              </button>
-              <button
-                type="button"
-                className="btn-icon"
-                title="Bookmarks"
-                aria-label="Bookmarks"
-              >
-                <i className="bi bi-star" aria-hidden />
-              </button>
-            </div>
-            <button
-              type="button"
-              className="btn-icon sidebar-collapse-btn"
-              title="Collapse sidebar"
-              aria-label="Collapse vault sidebar"
-              onClick={() => toggleSidebarCollapsed(true)}
-            >
-              <i className="bi bi-layout-sidebar-inset" aria-hidden />
-            </button>
-          </div>
-          <div className="sidebar-toolbar">
-            <button
-              type="button"
-              className="btn-icon"
-              title="New note"
-              aria-label="New note"
-              disabled={vaultLoading}
-              onClick={() => void handleNewNote()}
-            >
-              <i className="bi bi-file-earmark-plus" aria-hidden />
-            </button>
-            <button
-              type="button"
-              className="btn-icon"
-              title="New folder"
-              aria-label="New folder"
-              disabled={vaultLoading}
-              onClick={() => void handleNewFolder()}
-            >
-              <i className="bi bi-folder-plus" aria-hidden />
-            </button>
-            <button
-              type="button"
-              className="btn-icon"
-              title={state.sortAZ ? 'Unsort' : 'Sort A–Z'}
-              aria-label="Toggle sort order"
-              onClick={() => dispatch({ type: 'TOGGLE_SORT' })}
-            >
-              <i className="bi bi-sort-down-alt" aria-hidden />
-            </button>
-            <button
-              type="button"
-              className="btn-icon"
-              title="Collapse all"
-              aria-label="Collapse all folders"
-              disabled={vaultLoading}
-              onClick={() => dispatch({ type: 'COLLAPSE_ALL' })}
-            >
-              <i className="bi bi-arrows-collapse" aria-hidden />
-            </button>
-          </div>
-          {vaultError ? (
-            <div
-              className="px-2 pb-2 small text-danger text-break"
-              role="alert"
-            >
-              {vaultError}
-            </div>
-          ) : null}
-          <div className="sidebar-search">
-            <input
-              type="search"
-              className="form-control form-control-sm"
-              placeholder="Filter…"
-              value={state.searchQuery}
-              onChange={(e) =>
-                dispatch({ type: 'SET_SEARCH', value: e.target.value })
-              }
-              aria-label="Filter files"
-            />
-          </div>
-          <div className="sidebar-tree">
-            {vaultLoading ? (
-              <div className="p-3 text-muted small">Loading vault…</div>
-            ) : null}
-            {!vaultLoading && pinnedFileNodes.length > 0 ? (
-              <div className="sidebar-pinned-block">
-                <div className="sidebar-pinned-header-row">
-                  <div className="tree-row-wrap sidebar-pinned-folder-wrap">
-                    <button
-                      type="button"
-                      className="tree-row tree-row-main sidebar-pinned-folder"
-                      onClick={() => setPinnedSectionOpen((o) => !o)}
-                      aria-expanded={pinnedSectionOpen}
-                    >
-                      <span className="tree-chevron" aria-hidden>
-                        <i
-                          className={`bi bi-chevron-${pinnedSectionOpen ? 'down' : 'right'}`}
-                        />
-                      </span>
-                      <span className="tree-label text-truncate">
-                        Pinned files
-                      </span>
-                    </button>
-                  </div>
-                </div>
-                {pinnedSectionOpen
-                  ? pinnedFileNodes.map((node) => (
-                      <FileTreeRow
-                        key={node.id}
-                        node={node}
-                        vault={state.vault}
-                        pinnedIds={state.pinnedIds}
-                        activeFileId={state.activeFileId}
-                        dispatch={dispatch}
-                        onRequestDelete={handleDeleteRequest}
-                        depth={1}
-                        alwaysShowPath
-                        vaultLoading={vaultLoading}
-                        onRequestNoteTitleEdit={requestNoteTitleEdit}
-                      />
-                    ))
-                  : null}
-              </div>
-            ) : null}
-            {!vaultLoading ? (
-              <TreeRows
-                nodes={mainTreeNodes}
-                depth={0}
-                activeFileId={state.activeFileId}
-                dispatch={dispatch}
-                expandedOverrides={Boolean(state.searchQuery.trim())}
-                vault={state.vault}
-                pinnedIds={state.pinnedIds}
-                onRequestDelete={handleDeleteRequest}
-                focusedFolderId={focusedFolderId}
-                onFolderRowFocus={onFolderRowFocus}
-                folderRenameId={folderRenameId}
-                folderRenameDraft={folderRenameDraft}
-                onFolderRenameDraftChange={setFolderRenameDraft}
-                onStartFolderRename={onStartFolderRename}
-                onCommitFolderRename={commitFolderRename}
-                onCancelFolderRename={cancelFolderRename}
-                folderRenameInputRef={folderRenameInputRef}
-                vaultLoading={vaultLoading}
-                onRequestNoteTitleEdit={requestNoteTitleEdit}
-              />
-            ) : null}
-          </div>
-          <div className="sidebar-footer" ref={sidebarFooterRef}>
-            <div className="sidebar-footer-user text-truncate" title={username}>
-              {username}
-            </div>
-            <SidebarAccountMenu
-              footerMenuOpen={footerMenuOpen}
-              setFooterMenuOpen={setFooterMenuOpen}
-              setSettingsModalOpen={setSettingsModalOpen}
-              onLogout={onLogout}
-            />
-          </div>
-            </>
-          ) : null}
-        </aside>
-
-        {sidebarCollapsed ? (
-          <div className="sidebar-expand-rail">
-            <button
-              type="button"
-              className="sidebar-expand-rail-btn"
-              title="Show sidebar"
-              aria-label="Show vault sidebar"
-              onClick={() => toggleSidebarCollapsed(false)}
-            >
-              <i className="bi bi-layout-sidebar-inset-reverse" aria-hidden />
-            </button>
-            <div className="sidebar-expand-rail-account">
-              <SidebarAccountMenu
-                menuWrapRef={collapsedAccountMenuRef}
-                railPopover
-                footerMenuOpen={footerMenuOpen}
-                setFooterMenuOpen={setFooterMenuOpen}
-                setSettingsModalOpen={setSettingsModalOpen}
-                onLogout={onLogout}
-              />
-            </div>
-          </div>
-        ) : null}
+        <VaultSidebar
+          vault={state.vault}
+          vaultLoading={vaultLoading}
+          vaultError={vaultError}
+          searchQuery={state.searchQuery}
+          sortAZ={state.sortAZ}
+          pinnedIds={state.pinnedIds}
+          activeFileId={state.activeFileId}
+          dispatch={dispatch}
+          pinnedFileNodes={pinnedFileNodes}
+          mainTreeNodes={mainTreeNodes}
+          pinnedSectionOpen={pinnedSectionOpen}
+          setPinnedSectionOpen={setPinnedSectionOpen}
+          onNewNote={handleNewNote}
+          onNewFolder={handleNewFolder}
+          onRequestDelete={handleDeleteRequest}
+          focusedFolderId={focusedFolderId}
+          onFolderRowFocus={onFolderRowFocus}
+          folderRenameId={folderRenameId}
+          folderRenameDraft={folderRenameDraft}
+          onFolderRenameDraftChange={setFolderRenameDraft}
+          onStartFolderRename={onStartFolderRename}
+          onCommitFolderRename={commitFolderRename}
+          onCancelFolderRename={cancelFolderRename}
+          folderRenameInputRef={folderRenameInputRef}
+          onRequestNoteTitleEdit={requestNoteTitleEdit}
+          username={username}
+          onLogout={onLogout}
+          setSettingsModalOpen={setSettingsModalOpen}
+        />
 
         <section className="editor-pane" aria-label="Editor">
           <div className="tab-bar" role="tablist">

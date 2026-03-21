@@ -11,6 +11,9 @@
   --obs-bg-sidebar: var(--palette-navy);
   --obs-bg-tab-active: var(--palette-white);
   --obs-bg-tab-bar: #dbeaf6;
+  --obs-bg-tab-inactive: rgba(255, 255, 255, 0.52);
+  --obs-bg-tab-inactive-hover: rgba(255, 255, 255, 0.88);
+  --obs-tab-radius: 10px;
   --obs-text: #0d1b2a;
   --obs-text-muted: #3d5d78;
   --obs-selection: rgba(0, 71, 171, 0.12);
