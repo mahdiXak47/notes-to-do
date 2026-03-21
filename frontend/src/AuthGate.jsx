@@ -11,6 +11,7 @@ import './Login.css'
 export default function AuthGate() {
   const [phase, setPhase] = useState('checking')
   const [sessionUser, setSessionUser] = useState(null)
+  const [appMountKey, setAppMountKey] = useState(0)
 
   useEffect(() => {
     let cancelled = false
@@ -57,6 +58,7 @@ export default function AuthGate() {
 
   function handleLoginSuccess(username) {
     setSessionUser(username)
+    setAppMountKey((k) => k + 1)
     setPhase('authed')
   }
 
@@ -87,6 +89,10 @@ export default function AuthGate() {
   }
 
   return (
-    <App onLogout={handleLogout} username={sessionUser ?? ''} />
+    <App
+      key={appMountKey}
+      onLogout={handleLogout}
+      username={sessionUser ?? ''}
+    />
   )
 }

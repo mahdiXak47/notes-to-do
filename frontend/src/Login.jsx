@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import { loginWithPassword } from './auth.js'
 import './Login.css'
 
@@ -8,14 +8,6 @@ export default function Login({ onSuccess }) {
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [showSuccess, setShowSuccess] = useState(false)
-  const redirectRef = useRef(null)
-
-  useEffect(
-    () => () => {
-      if (redirectRef.current != null) window.clearTimeout(redirectRef.current)
-    },
-    [],
-  )
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -29,7 +21,7 @@ export default function Login({ onSuccess }) {
     try {
       await loginWithPassword(u, password)
       setShowSuccess(true)
-      redirectRef.current = window.setTimeout(() => onSuccess(u), 700)
+      onSuccess(u)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not sign in.')
     } finally {
