@@ -17,7 +17,7 @@ function withDirAuto(Tag) {
 function MarkdownPre(props) {
   const { node: _node, children, ...rest } = props
   return (
-    <pre dir="ltr" {...rest}>
+    <pre dir="auto" {...rest}>
       {children}
     </pre>
   )
@@ -27,7 +27,7 @@ function MarkdownCode(props) {
   const { inline, node: _node, children, ...rest } = props
   if (inline) {
     return (
-      <code dir="ltr" {...rest}>
+      <code dir="auto" {...rest}>
         {children}
       </code>
     )
@@ -43,10 +43,26 @@ const MARKDOWN_BIDI_COMPONENTS = {
   h4: withDirAuto('h4'),
   h5: withDirAuto('h5'),
   h6: withDirAuto('h6'),
+  ul: withDirAuto('ul'),
+  ol: withDirAuto('ol'),
   li: withDirAuto('li'),
   blockquote: withDirAuto('blockquote'),
+  table: withDirAuto('table'),
+  thead: withDirAuto('thead'),
+  tbody: withDirAuto('tbody'),
+  tr: withDirAuto('tr'),
   td: withDirAuto('td'),
   th: withDirAuto('th'),
+  strong: withDirAuto('strong'),
+  em: withDirAuto('em'),
+  del: withDirAuto('del'),
+  a: withDirAuto('a'),
+  dl: withDirAuto('dl'),
+  dt: withDirAuto('dt'),
+  dd: withDirAuto('dd'),
+  section: withDirAuto('section'),
+  sup: withDirAuto('sup'),
+  sub: withDirAuto('sub'),
   pre: MarkdownPre,
   code: MarkdownCode,
 }

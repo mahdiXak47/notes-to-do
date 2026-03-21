@@ -1,0 +1,19 @@
+/* Vazirmatn variable font; OFL in /fonts/vazirmatn/OFL.txt. */
+
+@font-face {
+  font-family: Vazirmatn;
+  src:
+    url('/fonts/vazirmatn/Vazirmatn-VariableFont_wght.ttf')
+      format('truetype-variations'),
+    url('/fonts/vazirmatn/Vazirmatn-VariableFont_wght.ttf') format('truetype');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  --font-title: Vazirmatn, ui-sans-serif, system-ui, sans-serif;
+  --font-preview: Vazirmatn, ui-sans-serif, system-ui, sans-serif;
+  --font-preview-mono: Vazirmatn, ui-monospace, SFMono-Regular, Menlo, Monaco,
+    Consolas, monospace;
+}
