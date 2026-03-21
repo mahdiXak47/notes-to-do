@@ -1,4 +1,4 @@
-import './components/editor/EditorEmptyState.css'
+import './EditorEmptyState.css'
 
 export function EditorEmptyState({
   vaultLoading,

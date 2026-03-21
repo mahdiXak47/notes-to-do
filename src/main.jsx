@@ -4,7 +4,7 @@ import 'bootstrap/dist/css/bootstrap.min.css'
 import 'bootstrap-icons/font/bootstrap-icons.css'
 import './styles/theme.css'
 import './styles/index.css'
-import AuthGate from './AuthGate.jsx'
+import AuthGate from './components/auth/AuthGate.jsx'
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>

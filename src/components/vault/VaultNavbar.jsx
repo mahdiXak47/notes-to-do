@@ -7,9 +7,9 @@ import {
   useRef,
   useState,
 } from 'react'
-import './components/vault/VaultNavbar.css'
-import { notePkFromClientId } from './vaultApi.js'
-import { findFile } from './vaultTreePaths.js'
+import './VaultNavbar.css'
+import { notePkFromClientId } from '../../vaultApi.js'
+import { findFile } from '../../vaultTreePaths.js'
 
 export const VaultNavbar = forwardRef(function VaultNavbar(
   {

@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import './components/editor/MarkdownEditor.css'
+import './MarkdownEditor.css'
 
 const EDITOR_SPLIT_STORAGE_KEY = 'notes_editor_split_pct'
 const EDITOR_SPLIT_MIN = 18
