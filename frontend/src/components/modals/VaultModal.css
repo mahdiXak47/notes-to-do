@@ -55,7 +55,26 @@
   color: #5a7a95;
   font-size: 0.8125rem;
   line-height: 1.45;
+  margin: 0 0 0.75rem;
+}
+
+.obs-delete-modal-sub:last-child {
+  margin-bottom: 0;
+}
+
+.obs-delete-modal-warnings {
   margin: 0;
+}
+
+.obs-delete-modal-warn {
+  color: #c62828;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  margin: 0 0 0.5rem;
+}
+
+.obs-delete-modal-warn:last-child {
+  margin-bottom: 0;
 }
 
 .obs-delete-modal-footer {

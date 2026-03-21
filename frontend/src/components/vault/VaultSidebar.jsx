@@ -22,7 +22,11 @@ function TreePathLabel({ segments, fallbackName }) {
   const { dir, name } = splitDirAndFileName(segments, fallbackName)
   const title = dir ? `${dir}/${name}` : name
   return (
-    <span className="tree-label text-truncate tree-path-label" title={title}>
+    <span
+      className="tree-label text-truncate tree-path-label"
+      title={title}
+      dir="auto"
+    >
       {dir ? (
         <>
           <span className="tree-path-dir">{dir}</span>
@@ -156,7 +160,11 @@ function TreeRows({
       const usePath = Boolean(pinned && folderSegs?.length)
       const isRenaming = folderRenameId === node.id
       rows.push(
-        <div key={node.id} style={{ paddingLeft: depth * 0.65 + 'rem' }}>
+        <div
+          key={node.id}
+          className="tree-folder-block"
+          style={{ paddingLeft: `${depth * 0.65}rem` }}
+        >
           <div
             className={`tree-row-wrap ${focusedFolderId === node.id ? 'is-folder-focused' : ''}`}
             onContextMenu={(e) => {
@@ -264,6 +272,9 @@ function TreeRows({
                     kind: 'folder',
                     id: node.id,
                     name: node.name,
+                    folderNonEmpty: Boolean(
+                      node.children && node.children.length > 0,
+                    ),
                   })
                 }}
               >
@@ -271,31 +282,33 @@ function TreeRows({
               </button>
             </div>
           </div>
-          {expanded && (
-            <TreeRows
-              nodes={node.children}
-              depth={depth + 1}
-              activeFileId={activeFileId}
-              dispatch={dispatch}
-              expandedOverrides={expandedOverrides}
-              vault={vault}
-              pinnedIds={pinnedIds}
-              onRequestDelete={onRequestDelete}
-              focusedFolderId={focusedFolderId}
-              onFolderRowFocus={onFolderRowFocus}
-              folderRenameId={folderRenameId}
-              folderRenameDraft={folderRenameDraft}
-              onFolderRenameDraftChange={onFolderRenameDraftChange}
-              onStartFolderRename={onStartFolderRename}
-              onCommitFolderRename={onCommitFolderRename}
-              onCancelFolderRename={onCancelFolderRename}
-              folderRenameInputRef={folderRenameInputRef}
-              vaultLoading={vaultLoading}
-              onRequestNoteTitleEdit={onRequestNoteTitleEdit}
-              onOpenFileContextMenu={onOpenFileContextMenu}
-              onOpenFolderContextMenu={onOpenFolderContextMenu}
-            />
-          )}
+          {expanded && node.children && node.children.length > 0 ? (
+            <div className="tree-folder-children">
+              <TreeRows
+                nodes={node.children}
+                depth={depth + 1}
+                activeFileId={activeFileId}
+                dispatch={dispatch}
+                expandedOverrides={expandedOverrides}
+                vault={vault}
+                pinnedIds={pinnedIds}
+                onRequestDelete={onRequestDelete}
+                focusedFolderId={focusedFolderId}
+                onFolderRowFocus={onFolderRowFocus}
+                folderRenameId={folderRenameId}
+                folderRenameDraft={folderRenameDraft}
+                onFolderRenameDraftChange={onFolderRenameDraftChange}
+                onStartFolderRename={onStartFolderRename}
+                onCommitFolderRename={onCommitFolderRename}
+                onCancelFolderRename={onCancelFolderRename}
+                folderRenameInputRef={folderRenameInputRef}
+                vaultLoading={vaultLoading}
+                onRequestNoteTitleEdit={onRequestNoteTitleEdit}
+                onOpenFileContextMenu={onOpenFileContextMenu}
+                onOpenFolderContextMenu={onOpenFolderContextMenu}
+              />
+            </div>
+          ) : null}
         </div>,
       )
     } else {
@@ -572,7 +585,7 @@ export function VaultSidebar({
               <input
                 type="search"
                 className="form-control form-control-sm"
-                placeholder="Filter…"
+                placeholder="search note…"
                 value={searchQuery}
                 onChange={(e) =>
                   dispatch({ type: 'SET_SEARCH', value: e.target.value })
@@ -605,8 +618,9 @@ export function VaultSidebar({
                       </button>
                     </div>
                   </div>
-                  {pinnedSectionOpen
-                    ? pinnedFileNodes.map((node) => (
+                  {pinnedSectionOpen ? (
+                    <div className="tree-folder-children">
+                      {pinnedFileNodes.map((node) => (
                         <FileTreeRow
                           key={node.id}
                           node={node}
@@ -621,8 +635,9 @@ export function VaultSidebar({
                           onRequestNoteTitleEdit={onRequestNoteTitleEdit}
                           onOpenFileContextMenu={openFileContextMenu}
                         />
-                      ))
-                    : null}
+                      ))}
+                    </div>
+                  ) : null}
                 </div>
               ) : null}
               {!vaultLoading ? (

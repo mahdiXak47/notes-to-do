@@ -373,6 +373,9 @@ function App({ onLogout = () => {}, username = '' }) {
                 kind: kind === 'folder' ? 'folder' : 'file',
                 id: node.id,
                 name: node.name,
+                folderNonEmpty:
+                  kind === 'folder' &&
+                  Boolean(node.children && node.children.length > 0),
               })
               break
             default:
