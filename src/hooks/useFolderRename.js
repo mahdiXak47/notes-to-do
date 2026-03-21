@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { folderPkFromClientId, patchFolderName } from '../vaultApi.js'
-import { findFolderNode } from '../vaultTreeOps.js'
+import { folderPkFromClientId, patchFolderName } from '../lib/vaultApi.js'
+import { findFolderNode } from '../lib/vaultTreeOps.js'
 
 export function useFolderRename({
   vaultRef,

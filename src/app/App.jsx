@@ -25,15 +25,15 @@ import {
   normalizeTreeFromApi,
   notePkFromClientId,
   patchNoteName,
-} from '../vaultApi.js'
-import { initialVaultState, vaultReducer } from '../vaultReducer.js'
+} from '../lib/vaultApi.js'
+import { initialVaultState, vaultReducer } from '../lib/vaultReducer.js'
 import {
   collectPinnedFileNodes,
   filterTree,
   sortTree,
   stripPinnedFilesFromNodes,
-} from '../vaultTreeOps.js'
-import { findFile } from '../vaultTreePaths.js'
+} from '../lib/vaultTreeOps.js'
+import { findFile } from '../lib/vaultTreePaths.js'
 import { useFolderRename } from '../hooks/useFolderRename.js'
 import { useNoteAutosave } from '../hooks/useNoteAutosave.js'
 import { useVaultKeyboardShortcuts } from '../hooks/useVaultKeyboardShortcuts.js'

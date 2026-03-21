@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { loginWithPassword } from '../../auth.js'
+import { loginWithPassword } from '../../lib/auth.js'
 import './Login.css'
 
 export default function Login({ onSuccess }) {

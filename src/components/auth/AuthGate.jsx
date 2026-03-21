@@ -5,7 +5,7 @@ import {
   clearStoredToken,
   ensureSession,
   getStoredUsername,
-} from '../../auth.js'
+} from '../../lib/auth.js'
 import './Login.css'
 
 export default function AuthGate() {
