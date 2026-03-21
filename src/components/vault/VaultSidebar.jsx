@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { apiUrl } from '../../lib/auth.js'
+import { VaultContextMenu } from './VaultContextMenu.jsx'
 import './VaultSidebar.css'
 import {
   findBreadcrumb,
@@ -44,6 +45,7 @@ function FileTreeRow({
   alwaysShowPath,
   vaultLoading,
   onRequestNoteTitleEdit,
+  onOpenFileContextMenu,
 }) {
   const pathSegs = findBreadcrumb(vault, node.id)
   const pinned = Boolean(pinnedIds[node.id])
@@ -54,6 +56,11 @@ function FileTreeRow({
     <div style={{ paddingLeft: depth * 0.65 + 'rem' }}>
       <div
         className={`tree-row-wrap ${activeFileId === node.id ? 'is-active' : ''}`}
+        onContextMenu={(e) => {
+          if (vaultLoading) return
+          e.preventDefault()
+          onOpenFileContextMenu(e, node)
+        }}
       >
         <button
           type="button"
@@ -137,6 +144,8 @@ function TreeRows({
   folderRenameInputRef,
   vaultLoading,
   onRequestNoteTitleEdit,
+  onOpenFileContextMenu,
+  onOpenFolderContextMenu,
 }) {
   const rows = []
   for (const node of nodes) {
@@ -150,6 +159,11 @@ function TreeRows({
         <div key={node.id} style={{ paddingLeft: depth * 0.65 + 'rem' }}>
           <div
             className={`tree-row-wrap ${focusedFolderId === node.id ? 'is-folder-focused' : ''}`}
+            onContextMenu={(e) => {
+              if (vaultLoading || isRenaming) return
+              e.preventDefault()
+              onOpenFolderContextMenu(e, node)
+            }}
           >
             <button
               type="button"
@@ -278,6 +292,8 @@ function TreeRows({
               folderRenameInputRef={folderRenameInputRef}
               vaultLoading={vaultLoading}
               onRequestNoteTitleEdit={onRequestNoteTitleEdit}
+              onOpenFileContextMenu={onOpenFileContextMenu}
+              onOpenFolderContextMenu={onOpenFolderContextMenu}
             />
           )}
         </div>,
@@ -296,6 +312,7 @@ function TreeRows({
           alwaysShowPath={false}
           vaultLoading={vaultLoading}
           onRequestNoteTitleEdit={onRequestNoteTitleEdit}
+          onOpenFileContextMenu={onOpenFileContextMenu}
         />,
       )
     }
@@ -399,11 +416,21 @@ export function VaultSidebar({
   username,
   onLogout,
   setSettingsModalOpen,
+  onVaultContextAction,
 }) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(readSidebarCollapsed)
   const [footerMenuOpen, setFooterMenuOpen] = useState(false)
+  const [ctxMenu, setCtxMenu] = useState(null)
   const sidebarFooterRef = useRef(null)
   const collapsedAccountMenuRef = useRef(null)
+
+  const openFileContextMenu = useCallback((e, node) => {
+    setCtxMenu({ x: e.clientX, y: e.clientY, kind: 'file', node })
+  }, [])
+
+  const openFolderContextMenu = useCallback((e, node) => {
+    setCtxMenu({ x: e.clientX, y: e.clientY, kind: 'folder', node })
+  }, [])
 
   const toggleSidebarCollapsed = useCallback((collapsed) => {
     setSidebarCollapsed(collapsed)
@@ -434,6 +461,20 @@ export function VaultSidebar({
 
   return (
     <>
+      <VaultContextMenu
+        open={Boolean(ctxMenu)}
+        x={ctxMenu?.x ?? 0}
+        y={ctxMenu?.y ?? 0}
+        variant={ctxMenu?.kind === 'folder' ? 'folder' : 'file'}
+        disabled={vaultLoading}
+        onClose={() => setCtxMenu(null)}
+        onAction={(actionId) => {
+          if (!ctxMenu) return
+          const { kind, node } = ctxMenu
+          setCtxMenu(null)
+          onVaultContextAction(actionId, kind, node)
+        }}
+      />
       <aside
         className={`sidebar${sidebarCollapsed ? ' sidebar--collapsed' : ''}`}
         aria-label="Vault explorer"
@@ -578,6 +619,7 @@ export function VaultSidebar({
                           alwaysShowPath
                           vaultLoading={vaultLoading}
                           onRequestNoteTitleEdit={onRequestNoteTitleEdit}
+                          onOpenFileContextMenu={openFileContextMenu}
                         />
                       ))
                     : null}
@@ -604,6 +646,8 @@ export function VaultSidebar({
                   folderRenameInputRef={folderRenameInputRef}
                   vaultLoading={vaultLoading}
                   onRequestNoteTitleEdit={onRequestNoteTitleEdit}
+                  onOpenFileContextMenu={openFileContextMenu}
+                  onOpenFolderContextMenu={openFolderContextMenu}
                 />
               ) : null}
             </div>

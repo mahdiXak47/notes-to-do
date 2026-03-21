@@ -1,0 +1,68 @@
+.obs-move-modal {
+  z-index: 1055;
+}
+
+.obs-move-modal-backdrop {
+  z-index: 1050;
+  background-color: rgba(0, 0, 80, 0.35);
+}
+
+.obs-move-modal .modal-dialog {
+  max-width: 420px;
+}
+
+.obs-move-modal-content {
+  background-color: #ffffff;
+  border: 1px solid rgba(0, 71, 171, 0.2);
+  border-radius: 12px;
+  box-shadow: 0 16px 48px rgba(0, 0, 80, 0.18);
+  overflow: hidden;
+}
+
+.obs-move-modal-header {
+  border-bottom: 1px solid rgba(0, 71, 171, 0.12);
+  padding: 1rem 1.25rem;
+  background-color: #f8fcff;
+}
+
+.obs-move-modal .modal-title {
+  color: #000080;
+  font-weight: 600;
+  font-size: 1.02rem;
+}
+
+.obs-move-modal-body {
+  padding: 0;
+  max-height: min(55vh, 22rem);
+  overflow-y: auto;
+  background: #ffffff;
+}
+
+.obs-move-target-btn {
+  display: block;
+  width: 100%;
+  text-align: start;
+  padding: 0.55rem 1.25rem;
+  border: none;
+  border-bottom: 1px solid rgba(0, 71, 171, 0.08);
+  background: #ffffff;
+  color: #0d1b2a;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: background-color 0.1s ease;
+}
+
+.obs-move-target-btn:hover {
+  background-color: rgba(0, 71, 171, 0.06);
+}
+
+.obs-move-target-btn.is-current {
+  background-color: rgba(0, 71, 171, 0.1);
+  font-weight: 500;
+}
+
+.obs-move-modal-footer {
+  padding: 0.85rem 1.25rem;
+  border-top: 1px solid rgba(0, 71, 171, 0.1);
+  background-color: #f0f8ff;
+}

@@ -127,3 +127,15 @@ export function collapseAll(nodes) {
     return n
   })
 }
+
+export function collectDescendantFolderIdsIncludingSelf(folderNode) {
+  const ids = new Set()
+  function walk(n) {
+    ids.add(n.id)
+    for (const c of n.children || []) {
+      if (c.type === 'folder') walk(c)
+    }
+  }
+  walk(folderNode)
+  return ids
+}

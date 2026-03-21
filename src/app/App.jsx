@@ -8,6 +8,7 @@ import {
 } from 'react'
 import './App.css'
 import { DeleteConfirmModal } from '../components/modals/DeleteConfirmModal.jsx'
+import { MoveTargetModal } from '../components/modals/MoveTargetModal.jsx'
 import { EditorEmptyState } from '../components/editor/EditorEmptyState.jsx'
 import { MarkdownEditor } from '../components/editor/MarkdownEditor.jsx'
 import { QuickOpenDialog } from '../components/modals/QuickOpenDialog.jsx'
@@ -20,20 +21,32 @@ import {
   createNote,
   deleteFolder,
   deleteNote,
+  duplicateFolderRoot,
+  duplicateNoteAsCopy,
+  downloadNoteAsMarkdownFile,
   fetchVaultTree,
   folderPkFromClientId,
+  moveFolderToParent,
+  moveNoteToFolder,
   normalizeTreeFromApi,
   notePkFromClientId,
   patchNoteName,
 } from '../lib/vaultApi.js'
 import { initialVaultState, vaultReducer } from '../lib/vaultReducer.js'
 import {
+  collectDescendantFolderIdsIncludingSelf,
   collectPinnedFileNodes,
   filterTree,
+  findFolderNode,
   sortTree,
   stripPinnedFilesFromNodes,
 } from '../lib/vaultTreeOps.js'
-import { findFile } from '../lib/vaultTreePaths.js'
+import {
+  findFile,
+  findParentFolderUidForFile,
+  findParentFolderUidForFolder,
+  listFolderMoveTargets,
+} from '../lib/vaultTreePaths.js'
 import { useFolderRename } from '../hooks/useFolderRename.js'
 import { useNoteAutosave } from '../hooks/useNoteAutosave.js'
 import { useVaultKeyboardShortcuts } from '../hooks/useVaultKeyboardShortcuts.js'
@@ -58,6 +71,7 @@ function App({ onLogout = () => {}, username = '' }) {
   const vaultRef = useRef([])
   vaultRef.current = state.vault
   const [settingsModalOpen, setSettingsModalOpen] = useState(false)
+  const [moveModal, setMoveModal] = useState(null)
   const modLabel = useMemo(() => modKeyLabel(), [])
 
   const syncVaultFromServer = useCallback(async () => {
@@ -236,6 +250,153 @@ function App({ onLogout = () => {}, username = '' }) {
     [displayTree, state.pinnedIds],
   )
 
+  const moveModalTargets = useMemo(() => {
+    if (!moveModal) return []
+    if (moveModal.kind === 'folder') {
+      const folderNode = findFolderNode(state.vault, moveModal.node.id)
+      if (!folderNode) return listFolderMoveTargets(state.vault, null)
+      const exclude = collectDescendantFolderIdsIncludingSelf(folderNode)
+      return listFolderMoveTargets(state.vault, exclude)
+    }
+    return listFolderMoveTargets(state.vault, null)
+  }, [moveModal, state.vault])
+
+  const moveModalCurrentParent = useMemo(() => {
+    if (!moveModal) return null
+    if (moveModal.kind === 'file') {
+      return findParentFolderUidForFile(state.vault, moveModal.node.id)
+    }
+    return findParentFolderUidForFolder(state.vault, moveModal.node.id)
+  }, [moveModal, state.vault])
+
+  const closeMoveModal = useCallback(() => {
+    setMoveModal(null)
+  }, [])
+
+  const confirmMoveToFolder = useCallback(
+    async (targetFolderUid) => {
+      if (!moveModal) return
+      const { kind, node } = moveModal
+      const targetPk =
+        targetFolderUid == null ? null : folderPkFromClientId(targetFolderUid)
+      if (kind === 'folder' && targetFolderUid === node.id) {
+        closeMoveModal()
+        return
+      }
+      if (kind === 'file') {
+        const cur = findParentFolderUidForFile(state.vault, node.id)
+        if (cur === targetFolderUid) {
+          closeMoveModal()
+          return
+        }
+      } else {
+        const curParent = findParentFolderUidForFolder(state.vault, node.id)
+        if (curParent === targetFolderUid) {
+          closeMoveModal()
+          return
+        }
+      }
+      try {
+        setVaultError(null)
+        if (kind === 'file') {
+          const pk = notePkFromClientId(node.id)
+          if (pk == null) return
+          await moveNoteToFolder(pk, targetPk)
+        } else {
+          const pk = folderPkFromClientId(node.id)
+          if (pk == null) return
+          await moveFolderToParent(pk, targetPk)
+        }
+        closeMoveModal()
+        await syncVaultFromServer()
+      } catch (e) {
+        setVaultError(e instanceof Error ? e.message : 'Move failed.')
+      }
+    },
+    [moveModal, state.vault, syncVaultFromServer, closeMoveModal],
+  )
+
+  const onVaultContextAction = useCallback(
+    (action, kind, node) => {
+      void (async () => {
+        if (vaultLoading) return
+        try {
+          switch (action) {
+            case 'newNote': {
+              if (kind !== 'folder') return
+              setVaultError(null)
+              const created = await createNote(
+                node.id,
+                'Untitled',
+                vaultRef.current,
+              )
+              await syncVaultFromServer()
+              dispatch({ type: 'OPEN_FILE', id: `n-${created.id}` })
+              break
+            }
+            case 'newFolder': {
+              if (kind !== 'folder') return
+              setVaultError(null)
+              await createFolder(node.id, 'New folder', vaultRef.current)
+              await syncVaultFromServer()
+              break
+            }
+            case 'duplicate': {
+              setVaultError(null)
+              if (kind === 'file') {
+                await duplicateNoteAsCopy(node, vaultRef.current)
+              } else {
+                await duplicateFolderRoot(
+                  node,
+                  () => vaultRef.current,
+                  syncVaultFromServer,
+                )
+              }
+              await syncVaultFromServer()
+              break
+            }
+            case 'move':
+              setMoveModal({ kind, node })
+              break
+            case 'download': {
+              if (kind !== 'file') return
+              downloadNoteAsMarkdownFile(node.name, node.content)
+              break
+            }
+            case 'rename': {
+              if (kind === 'folder') onStartFolderRename(node.id, node.name)
+              else requestNoteTitleEdit(node.id, node.name)
+              break
+            }
+            case 'delete':
+              handleDeleteRequest({
+                kind: kind === 'folder' ? 'folder' : 'file',
+                id: node.id,
+                name: node.name,
+              })
+              break
+            default:
+              break
+          }
+        } catch (e) {
+          setVaultError(
+            e instanceof Error
+              ? e.message
+              : 'That action could not be completed.',
+          )
+        }
+      })()
+    },
+    [
+      vaultLoading,
+      syncVaultFromServer,
+      dispatch,
+      onStartFolderRename,
+      requestNoteTitleEdit,
+      handleDeleteRequest,
+    ],
+  )
+
   const openVaultFile = useCallback((id) => {
     dispatch({ type: 'OPEN_FILE', id })
   }, [dispatch])
@@ -316,6 +477,7 @@ function App({ onLogout = () => {}, username = '' }) {
           username={username}
           onLogout={onLogout}
           setSettingsModalOpen={setSettingsModalOpen}
+          onVaultContextAction={onVaultContextAction}
         />
 
         <section className="editor-pane" aria-label="Editor">
@@ -367,6 +529,21 @@ function App({ onLogout = () => {}, username = '' }) {
         onDontAskAgainChange={setDeleteModalDontAskAgain}
         onConfirm={confirmDelete}
         onClose={closeDeleteModal}
+      />
+
+      <MoveTargetModal
+        open={Boolean(moveModal)}
+        title={
+          moveModal
+            ? moveModal.kind === 'file'
+              ? `Move file “${moveModal.node.name}” to…`
+              : `Move folder “${moveModal.node.name}” to…`
+            : ''
+        }
+        targets={moveModalTargets}
+        currentFolderUid={moveModalCurrentParent ?? null}
+        onPick={(folderUid) => void confirmMoveToFolder(folderUid)}
+        onClose={closeMoveModal}
       />
     </div>
   )

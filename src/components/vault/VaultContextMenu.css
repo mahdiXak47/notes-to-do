@@ -1,0 +1,59 @@
+.vault-ctx-menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1070;
+  background: transparent;
+}
+
+.vault-ctx-menu {
+  position: fixed;
+  z-index: 1071;
+  min-width: 11.5rem;
+  max-width: min(18rem, calc(100vw - 1rem));
+  padding: 0.35rem 0;
+  border-radius: 8px;
+  border: 1px solid rgba(130, 200, 229, 0.28);
+  background-color: rgba(8, 22, 48, 0.98);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+  color: #f0f8ff;
+  font-size: 0.8125rem;
+  line-height: 1.35;
+}
+
+.vault-ctx-menu-sep {
+  height: 1px;
+  margin: 0.35rem 0;
+  background: rgba(130, 200, 229, 0.2);
+  border: none;
+  padding: 0;
+}
+
+.vault-ctx-menu-item {
+  display: block;
+  width: 100%;
+  text-align: start;
+  padding: 0.4rem 0.85rem;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  transition: background-color 0.1s ease, color 0.1s ease;
+}
+
+.vault-ctx-menu-item:hover:not(:disabled),
+.vault-ctx-menu-item:focus-visible {
+  outline: none;
+  background-color: rgba(120, 80, 200, 0.55);
+  color: #ffffff;
+}
+
+.vault-ctx-menu-item:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.vault-ctx-menu-item--danger:hover:not(:disabled),
+.vault-ctx-menu-item--danger:focus-visible {
+  background-color: rgba(200, 60, 80, 0.45);
+}
