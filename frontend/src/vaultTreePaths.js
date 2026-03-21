@@ -3,6 +3,17 @@ export function pathJoined(segments) {
   return segments.join('/')
 }
 
+export function findFile(nodes, fileId) {
+  for (const n of nodes) {
+    if (n.type === 'file' && n.id === fileId) return n
+    if (n.type === 'folder') {
+      const f = findFile(n.children, fileId)
+      if (f) return f
+    }
+  }
+  return null
+}
+
 export function findBreadcrumb(nodes, fileId, acc = []) {
   for (const n of nodes) {
     if (n.type === 'file' && n.id === fileId) return [...acc, n.name]

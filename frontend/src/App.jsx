@@ -9,6 +9,7 @@ import {
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import './App.css'
+import { VaultNavbar } from './VaultNavbar.jsx'
 import { VaultSidebar } from './VaultSidebar.jsx'
 import {
   collectExpandedByFolderId,
@@ -25,7 +26,7 @@ import {
   patchNoteName,
   pruneStateForVaultTree,
 } from './vaultApi.js'
-import { findBreadcrumb, pathJoined } from './vaultTreePaths.js'
+import { findBreadcrumb, findFile, pathJoined } from './vaultTreePaths.js'
 
 const SKIP_DELETE_CONFIRM_KEY = 'notes_skip_delete_confirm'
 const EDITOR_SPLIT_STORAGE_KEY = 'notes_editor_split_pct'
@@ -77,17 +78,6 @@ function filterTree(nodes, query) {
     return out
   }
   return walk(nodes)
-}
-
-function findFile(nodes, fileId) {
-  for (const n of nodes) {
-    if (n.type === 'file' && n.id === fileId) return n
-    if (n.type === 'folder') {
-      const f = findFile(n.children, fileId)
-      if (f) return f
-    }
-  }
-  return null
 }
 
 function flattenVaultFiles(nodes, prefix = []) {
@@ -312,11 +302,7 @@ function App({ onLogout = () => {}, username = '' }) {
   const [quickOpenQuery, setQuickOpenQuery] = useState('')
   const [quickOpenIndex, setQuickOpenIndex] = useState(0)
   const quickOpenInputRef = useRef(null)
-  const [titleEditing, setTitleEditing] = useState(false)
-  const [titleDraft, setTitleDraft] = useState('')
-  const titleInputRef = useRef(null)
-  const titleBlurIgnoredUntilRef = useRef(0)
-  const prevTitleResetFileIdRef = useRef(null)
+  const vaultNavbarRef = useRef(null)
   const pendingNoteTitleEditRef = useRef(null)
   const [focusedFolderId, setFocusedFolderId] = useState(null)
   const [folderRenameId, setFolderRenameId] = useState(null)
@@ -583,8 +569,7 @@ function App({ onLogout = () => {}, username = '' }) {
     (fileId, name) => {
       if (vaultLoading) return
       if (state.activeFileId === fileId) {
-        setTitleDraft(name)
-        setTitleEditing(true)
+        vaultNavbarRef.current?.beginTitleEdit(name)
         return
       }
       pendingNoteTitleEditRef.current = { fileId, name }
@@ -739,41 +724,6 @@ function App({ onLogout = () => {}, username = '' }) {
     : null
 
   useEffect(() => {
-    if (prevTitleResetFileIdRef.current === state.activeFileId) return
-    prevTitleResetFileIdRef.current = state.activeFileId
-    const pending = pendingNoteTitleEditRef.current
-    pendingNoteTitleEditRef.current = null
-    if (pending && state.activeFileId && pending.fileId === state.activeFileId) {
-      setTitleDraft(pending.name)
-      setTitleEditing(true)
-      return
-    }
-    setTitleEditing(false)
-    setTitleDraft('')
-  }, [state.activeFileId])
-
-  useEffect(() => {
-    if (!titleEditing) return undefined
-    titleBlurIgnoredUntilRef.current = Date.now() + 220
-    const t = window.setTimeout(() => {
-      titleBlurIgnoredUntilRef.current = 0
-    }, 240)
-    return () => window.clearTimeout(t)
-  }, [titleEditing])
-
-  useEffect(() => {
-    if (!titleEditing) return undefined
-    const raf = window.requestAnimationFrame(() => {
-      const el = titleInputRef.current
-      if (el) {
-        el.focus()
-        el.select()
-      }
-    })
-    return () => window.cancelAnimationFrame(raf)
-  }, [titleEditing])
-
-  useEffect(() => {
     if (!folderRenameId) return undefined
     const raf = window.requestAnimationFrame(() => {
       const el = folderRenameInputRef.current
@@ -792,37 +742,20 @@ function App({ onLogout = () => {}, username = '' }) {
     setFolderRenameDraft('')
   }, [state.activeFileId])
 
-  const commitNoteTitleEdit = useCallback(async () => {
-    if (!activeFile) {
-      setTitleEditing(false)
-      return
-    }
-    const trimmed = titleDraft.trim()
-    if (!trimmed) {
-      setTitleDraft(activeFile.name)
-      setTitleEditing(false)
-      return
-    }
-    if (trimmed === activeFile.name) {
-      setTitleEditing(false)
-      return
-    }
-    const pk = notePkFromClientId(activeFile.id)
-    if (pk == null) {
-      setTitleEditing(false)
-      return
-    }
-    try {
+  const renameActiveNote = useCallback(
+    async (fileId, trimmed) => {
+      const pk = notePkFromClientId(fileId)
+      if (pk == null) return
       setVaultError(null)
       await patchNoteName(pk, trimmed)
-      dispatch({ type: 'RENAME_NOTE', fileId: activeFile.id, name: trimmed })
-      setTitleEditing(false)
-    } catch (e) {
-      setVaultError(e instanceof Error ? e.message : 'Could not rename note.')
-      setTitleDraft(activeFile.name)
-      setTitleEditing(false)
-    }
-  }, [activeFile, titleDraft, dispatch])
+      dispatch({ type: 'RENAME_NOTE', fileId, name: trimmed })
+    },
+    [dispatch],
+  )
+
+  const onRenameNoteError = useCallback((message) => {
+    setVaultError(message)
+  }, [])
 
   useEffect(() => {
     if (state.activeFileId === prevActiveFileIdRef.current) return
@@ -874,14 +807,6 @@ function App({ onLogout = () => {}, username = '' }) {
     }
   }, [state.activeFileId, activeFile?.content])
 
-  const breadcrumb = useMemo(() => {
-    if (!state.activeFileId) return null
-    return findBreadcrumb(state.vault, state.activeFileId)
-  }, [state.vault, state.activeFileId])
-
-  const canBack = state.nav.i > 0
-  const canForward = state.nav.i < state.nav.ids.length - 1
-
   return (
     <div className="app-obsidian">
       <div className="app-body">
@@ -917,142 +842,22 @@ function App({ onLogout = () => {}, username = '' }) {
         />
 
         <section className="editor-pane" aria-label="Editor">
-          <div className="tab-bar" role="tablist">
-            {state.openTabs.map((id) => {
-              const f = findFile(state.vault, id)
-              const label = f?.name ?? id
-              const isActive = id === state.activeFileId
-              return (
-                <div
-                  key={id}
-                  role="tab"
-                  aria-selected={isActive}
-                  className={`tab-item ${isActive ? 'active' : ''}`}
-                >
-                  <button
-                    type="button"
-                    className="tab-select flex-grow-1 text-truncate border-0 bg-transparent p-0 text-start"
-                    style={{ color: 'inherit' }}
-                    onClick={() => dispatch({ type: 'OPEN_FILE', id })}
-                  >
-                    {label}
-                  </button>
-                  <button
-                    type="button"
-                    className="tab-close"
-                    aria-label={`Close ${label}`}
-                    onClick={() => dispatch({ type: 'CLOSE_TAB', id })}
-                  >
-                    <i className="bi bi-x-lg" aria-hidden />
-                  </button>
-                </div>
-              )
-            })}
-            <button
-              type="button"
-              className="tab-new"
-              title="New note"
-              aria-label="New note"
-              disabled={vaultLoading}
-              onClick={() => void handleNewNote()}
-            >
-              +
-            </button>
-          </div>
-
-          <div className="sub-bar">
-            <button
-              type="button"
-              className="btn-icon"
-              title="Back"
-              aria-label="Back"
-              disabled={!canBack}
-              onClick={() => dispatch({ type: 'GO_BACK' })}
-            >
-              <i className="bi bi-arrow-left" aria-hidden />
-            </button>
-            <button
-              type="button"
-              className="btn-icon"
-              title="Forward"
-              aria-label="Forward"
-              disabled={!canForward}
-              onClick={() => dispatch({ type: 'GO_FORWARD' })}
-            >
-              <i className="bi bi-arrow-right" aria-hidden />
-            </button>
-            <div className="breadcrumb-obs" aria-live="polite">
-              {breadcrumb && breadcrumb.length > 0 ? (
-                breadcrumb.map((part, i) => (
-                  <span key={`${part}-${i}`}>
-                    {i > 0 ? <span className="sep">/</span> : null}
-                    {part}
-                  </span>
-                ))
-              ) : (
-                <span className="text-muted">No file open</span>
-              )}
-            </div>
-          </div>
+          <VaultNavbar
+            ref={vaultNavbarRef}
+            vault={state.vault}
+            openTabs={state.openTabs}
+            activeFileId={state.activeFileId}
+            nav={state.nav}
+            dispatch={dispatch}
+            vaultLoading={vaultLoading}
+            onNewNote={handleNewNote}
+            pendingNoteTitleEditRef={pendingNoteTitleEditRef}
+            onRenameActiveNote={renameActiveNote}
+            onRenameNoteError={onRenameNoteError}
+          />
 
           {activeFile ? (
             <div className="editor-main">
-              {titleEditing ? (
-                <input
-                  ref={titleInputRef}
-                  type="text"
-                  className="note-title-input"
-                  value={titleDraft}
-                  onChange={(e) => setTitleDraft(e.target.value)}
-                  onBlur={() => {
-                    if (Date.now() < titleBlurIgnoredUntilRef.current) return
-                    void commitNoteTitleEdit()
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault()
-                      e.stopPropagation()
-                      void commitNoteTitleEdit()
-                    }
-                    if (e.key === 'Escape') {
-                      e.preventDefault()
-                      setTitleDraft(activeFile.name)
-                      setTitleEditing(false)
-                    }
-                  }}
-                  aria-label="Note title"
-                  maxLength={255}
-                />
-              ) : (
-                <h1
-                  className="note-title note-title--clickable"
-                  onClick={() => {
-                    if (vaultLoading) return
-                    setTitleDraft(activeFile.name)
-                    setTitleEditing(true)
-                  }}
-                  onDoubleClick={(e) => {
-                    e.preventDefault()
-                    if (vaultLoading) return
-                    setTitleDraft(activeFile.name)
-                    setTitleEditing(true)
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault()
-                      if (!vaultLoading) {
-                        setTitleDraft(activeFile.name)
-                        setTitleEditing(true)
-                      }
-                    }
-                  }}
-                  role="button"
-                  tabIndex={0}
-                  title="Click or double-click to rename"
-                >
-                  {activeFile.name}
-                </h1>
-              )}
               <div
                 ref={editorSplitRef}
                 className="editor-split"
