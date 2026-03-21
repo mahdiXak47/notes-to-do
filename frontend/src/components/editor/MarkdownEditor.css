@@ -111,9 +111,23 @@
   overflow: auto;
   padding: 0.75rem 1rem 1.25rem;
   background-color: #fafdff;
+  font-family: var(--font-preview);
   font-size: 0.9375rem;
   line-height: 1.6;
   color: #1a3044;
+}
+
+.md-preview strong,
+.md-preview em,
+.md-preview del,
+.md-preview a,
+.md-preview li,
+.md-preview blockquote,
+.md-preview td,
+.md-preview th,
+.md-preview dt,
+.md-preview dd {
+  font-family: inherit;
 }
 
 .md-preview p,
@@ -126,7 +140,11 @@
 .md-preview li,
 .md-preview blockquote,
 .md-preview td,
-.md-preview th {
+.md-preview th,
+.md-preview dl,
+.md-preview dt,
+.md-preview dd,
+.md-preview section {
   text-align: start;
 }
 
@@ -136,9 +154,13 @@
 
 .md-preview h1,
 .md-preview h2,
-.md-preview h3 {
+.md-preview h3,
+.md-preview h4,
+.md-preview h5,
+.md-preview h6 {
   margin-top: 1rem;
   margin-bottom: 0.5rem;
+  font-family: inherit;
   font-weight: 600;
   color: #0d1b2a;
   line-height: 1.25;
@@ -146,7 +168,10 @@
 
 .md-preview h1:first-child,
 .md-preview h2:first-child,
-.md-preview h3:first-child {
+.md-preview h3:first-child,
+.md-preview h4:first-child,
+.md-preview h5:first-child,
+.md-preview h6:first-child {
   margin-top: 0;
 }
 
@@ -164,6 +189,18 @@
   font-size: 1.05rem;
 }
 
+.md-preview h4 {
+  font-size: 1.02rem;
+}
+
+.md-preview h5 {
+  font-size: 0.98rem;
+}
+
+.md-preview h6 {
+  font-size: 0.95rem;
+}
+
 .md-preview p {
   margin: 0 0 0.75rem;
 }
@@ -171,7 +208,8 @@
 .md-preview ul,
 .md-preview ol {
   margin: 0 0 0.75rem;
-  padding-left: 1.35rem;
+  padding-left: 0;
+  padding-inline-start: 1.35rem;
 }
 
 .md-preview li {
@@ -180,7 +218,8 @@
 
 .md-preview ul.contains-task-list {
   list-style: none;
-  padding-left: 0.25rem;
+  padding-left: 0;
+  padding-inline-start: 0.25rem;
 }
 
 .md-preview li.task-list-item {
@@ -201,11 +240,12 @@
   border: 1px solid rgba(0, 71, 171, 0.08);
   border-radius: 6px;
   overflow-x: auto;
+  font-family: var(--font-preview-mono);
   font-size: 0.8125rem;
 }
 
 .md-preview code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-family: var(--font-preview-mono);
   font-size: 0.88em;
   background-color: rgba(0, 71, 171, 0.07);
   padding: 0.12em 0.35em;
@@ -220,8 +260,10 @@
 
 .md-preview blockquote {
   margin: 0.5rem 0 1rem;
-  padding: 0.25rem 0 0.25rem 1rem;
-  border-left: 3px solid #82c8e5;
+  padding: 0.25rem 0;
+  padding-inline-start: 1rem;
+  border-left: none;
+  border-inline-start: 3px solid #82c8e5;
   color: #4a6578;
 }
 
@@ -233,6 +275,7 @@
   border-collapse: collapse;
   width: 100%;
   margin: 0.5rem 0 1rem;
+  font-family: inherit;
   font-size: 0.875rem;
 }
 
