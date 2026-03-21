@@ -16,11 +16,10 @@
   border-radius: 6px;
   background-color: #ffffff;
   color: #1a3044;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-family: var(--font-preview);
   font-size: 0.875rem;
   line-height: 1.5;
   padding: 0.75rem 1rem;
-  /* Per-line direction from first strong character (e.g. Persian vs Latin). */
   unicode-bidi: plaintext;
   text-align: start;
 }

@@ -47,14 +47,34 @@ export function DeleteConfirmModal({
               />
             </div>
             <div className="modal-body obs-delete-modal-body">
-              <p className="obs-delete-modal-lead">
-                {target.kind === 'folder'
-                  ? `Are you sure you want to delete the folder “${target.name}” and everything inside?`
-                  : `Are you sure you want to delete “${target.name}”?`}
-              </p>
-              <p className="obs-delete-modal-sub">
-                This removes it from the server and disk. This cannot be undone.
-              </p>
+              {target.kind === 'folder' ? (
+                <>
+                  <p className="obs-delete-modal-lead">
+                    Are you sure you want to delete &ldquo;{target.name}&rdquo;?
+                  </p>
+                  {target.folderNonEmpty ? (
+                    <div className="obs-delete-modal-warnings">
+                      <p className="obs-delete-modal-warn">
+                        This folder is not empty.
+                      </p>
+                      <p className="obs-delete-modal-warn">
+                        If you continue, all files inside this folder will be
+                        deleted.
+                      </p>
+                    </div>
+                  ) : null}
+                </>
+              ) : (
+                <>
+                  <p className="obs-delete-modal-lead">
+                    Are you sure you want to delete &ldquo;{target.name}&rdquo;?
+                  </p>
+                  <p className="obs-delete-modal-sub">
+                    This removes it from the server and disk. This cannot be
+                    undone.
+                  </p>
+                </>
+              )}
             </div>
             <div className="modal-footer obs-delete-modal-footer">
               <div className="form-check obs-delete-modal-check m-0">

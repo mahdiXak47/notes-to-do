@@ -16,6 +16,7 @@
   background-color: rgba(8, 22, 48, 0.98);
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
   color: #f0f8ff;
+  font-family: var(--font-title);
   font-size: 0.8125rem;
   line-height: 1.35;
 }
