@@ -95,7 +95,6 @@ class Note(models.Model):
         related_name='notes',
     )
     name = models.CharField(max_length=255)
-    body = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -125,6 +124,17 @@ class Note(models.Model):
             return (base / rel / f'{sanitize_segment(self.name)}.md').resolve()
         return (base / f'{sanitize_segment(self.name)}.md').resolve()
 
+    def read_content(self) -> str:
+        path = self.get_fs_path()
+        if not path.is_file():
+            return ''
+        return path.read_text(encoding='utf-8', errors='replace')
+
+    def write_content(self, text: str) -> None:
+        path = self.get_fs_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text or '', encoding='utf-8')
+
     def save(self, *args, **kwargs):
         old_path = None
         if self.pk:
@@ -135,13 +145,18 @@ class Note(models.Model):
                 pass
         super().save(*args, **kwargs)
         new_path = self.get_fs_path()
-        if old_path is not None and old_path != new_path and old_path.is_file():
-            try:
-                old_path.unlink()
-            except OSError:
-                pass
         new_path.parent.mkdir(parents=True, exist_ok=True)
-        new_path.write_text(self.body or '', encoding='utf-8')
+        if old_path is not None and old_path != new_path:
+            if old_path.is_file():
+                try:
+                    shutil.move(str(old_path), str(new_path))
+                except OSError:
+                    if not new_path.is_file():
+                        new_path.write_text('', encoding='utf-8')
+            elif not new_path.is_file():
+                new_path.write_text('', encoding='utf-8')
+        elif not new_path.is_file():
+            new_path.write_text('', encoding='utf-8')
 
     def delete(self, *args, **kwargs):
         path = self.get_fs_path()

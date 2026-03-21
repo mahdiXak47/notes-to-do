@@ -15,5 +15,5 @@ class FolderAdmin(admin.ModelAdmin):
 class NoteAdmin(admin.ModelAdmin):
     list_display = ('name', 'user', 'folder', 'updated_at')
     list_filter = ('user',)
-    search_fields = ('name', 'body')
+    search_fields = ('name',)
     raw_id_fields = ('folder',)

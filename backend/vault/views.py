@@ -73,7 +73,7 @@ def vault_tree(request):
             'kind': 'note',
             'type': 'file',
             'name': note.name,
-            'content': note.body,
+            'content': note.read_content(),
             'meta': None,
         }
 
