@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import './VaultModal.css'
+import './components/modals/VaultModal.css'
 
 export function SettingsModal({ open, username, onClose }) {
   useEffect(() => {

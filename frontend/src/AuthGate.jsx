@@ -6,7 +6,7 @@ import {
   ensureSession,
   getStoredUsername,
 } from './auth.js'
-import './Login.css'
+import './components/auth/Login.css'
 
 export default function AuthGate() {
   const [phase, setPhase] = useState('checking')

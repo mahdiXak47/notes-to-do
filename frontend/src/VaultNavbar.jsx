@@ -7,7 +7,7 @@ import {
   useRef,
   useState,
 } from 'react'
-import './VaultNavbar.css'
+import './components/vault/VaultNavbar.css'
 import { notePkFromClientId } from './vaultApi.js'
 import { findFile } from './vaultTreePaths.js'
 
