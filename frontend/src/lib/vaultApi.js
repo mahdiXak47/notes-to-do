@@ -1,4 +1,8 @@
 import { authorizedFetch } from './auth.js'
+import {
+  findParentFolderUidForFile,
+  findParentFolderUidForFolder,
+} from './vaultTreePaths.js'
 
 function pickUniqueName(base, used) {
   const set = new Set(used.map((s) => s.toLowerCase()))
@@ -147,6 +151,14 @@ export async function patchNoteName(notePk, name) {
   return patchNote(notePk, { name })
 }
 
+export async function moveNoteToFolder(notePk, folderPkOrNull) {
+  return patchNote(notePk, { folder: folderPkOrNull })
+}
+
+export async function moveFolderToParent(folderPk, parentFolderPkOrNull) {
+  return patchFolder(folderPk, { parent: parentFolderPkOrNull })
+}
+
 export async function patchFolder(folderPk, payload) {
   const res = await authorizedFetch(`/api/vault/folders/${folderPk}/`, {
     method: 'PATCH',
@@ -206,6 +218,73 @@ function collectAllVaultIds(nodes, acc = new Set()) {
     if (n.type === 'folder') collectAllVaultIds(n.children, acc)
   }
   return acc
+}
+
+export async function duplicateNoteAsCopy(noteNode, rootNodes) {
+  const parentUid = findParentFolderUidForFile(rootNodes, noteNode.id)
+  if (parentUid === undefined) {
+    throw new Error('Note not found.')
+  }
+  const created = await createNote(
+    parentUid,
+    `${noteNode.name} (copy)`,
+    rootNodes,
+  )
+  await patchNoteBody(created.id, noteNode.content ?? '')
+  return created
+}
+
+export async function duplicateFolderSubtree(
+  folderNode,
+  parentFolderUid,
+  getRootNodes,
+  onAfterStep,
+) {
+  const created = await createFolder(
+    parentFolderUid,
+    `${folderNode.name} (copy)`,
+    getRootNodes(),
+  )
+  await onAfterStep()
+  const newUid = `f-${created.id}`
+  for (const child of folderNode.children || []) {
+    if (child.type === 'folder') {
+      await duplicateFolderSubtree(child, newUid, getRootNodes, onAfterStep)
+    } else {
+      const createdNote = await createNote(
+        newUid,
+        `${child.name} (copy)`,
+        getRootNodes(),
+      )
+      await patchNoteBody(createdNote.id, child.content ?? '')
+      await onAfterStep()
+    }
+  }
+}
+
+export async function duplicateFolderRoot(folderNode, getRootNodes, onAfterStep) {
+  const parentUid = findParentFolderUidForFolder(getRootNodes(), folderNode.id)
+  if (parentUid === undefined) {
+    throw new Error('Folder not found.')
+  }
+  await duplicateFolderSubtree(
+    folderNode,
+    parentUid,
+    getRootNodes,
+    onAfterStep,
+  )
+}
+
+export function downloadNoteAsMarkdownFile(name, content) {
+  const safe = String(name || 'note').replace(/[/\\?%*:|"<>]/g, '-')
+  const blob = new Blob([content ?? ''], {
+    type: 'text/markdown;charset=utf-8',
+  })
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(blob)
+  a.download = `${safe || 'note'}.md`
+  a.click()
+  URL.revokeObjectURL(a.href)
 }
 
 export function pruneStateForVaultTree(prevState, newVault) {

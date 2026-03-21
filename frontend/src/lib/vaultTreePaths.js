@@ -44,3 +44,67 @@ export function splitDirAndFileName(segments, fallbackName) {
     name: segments[segments.length - 1],
   }
 }
+
+export function findParentFolderUidForFile(nodes, fileId) {
+  for (const n of nodes) {
+    if (n.type === 'file' && n.id === fileId) return null
+  }
+  for (const n of nodes) {
+    if (n.type === 'folder') {
+      const r = findParentFolderUidUnderFolder(n, fileId)
+      if (r !== undefined) return r
+    }
+  }
+  return undefined
+}
+
+function findParentFolderUidUnderFolder(folder, fileId) {
+  for (const c of folder.children || []) {
+    if (c.type === 'file' && c.id === fileId) return folder.id
+    if (c.type === 'folder') {
+      const r = findParentFolderUidUnderFolder(c, fileId)
+      if (r !== undefined) return r
+    }
+  }
+  return undefined
+}
+
+export function findParentFolderUidForFolder(nodes, folderId) {
+  for (const n of nodes) {
+    if (n.type === 'folder' && n.id === folderId) return null
+  }
+  for (const n of nodes) {
+    if (n.type === 'folder') {
+      const r = findParentUidForFolderUnder(n, folderId)
+      if (r !== undefined) return r
+    }
+  }
+  return undefined
+}
+
+function findParentUidForFolderUnder(parentFolder, targetFolderId) {
+  for (const c of parentFolder.children || []) {
+    if (c.type === 'folder' && c.id === targetFolderId) return parentFolder.id
+    if (c.type === 'folder') {
+      const r = findParentUidForFolderUnder(c, targetFolderId)
+      if (r !== undefined) return r
+    }
+  }
+  return undefined
+}
+
+export function listFolderMoveTargets(vault, excludeFolderIds) {
+  const exclude = excludeFolderIds ?? new Set()
+  const out = [{ folderUid: null, label: 'Vault root' }]
+  function walk(nodes, prefix) {
+    for (const n of nodes) {
+      if (n.type !== 'folder') continue
+      if (exclude.has(n.id)) continue
+      const label = prefix ? `${prefix} / ${n.name}` : n.name
+      out.push({ folderUid: n.id, label })
+      walk(n.children || [], label)
+    }
+  }
+  walk(vault, '')
+  return out
+}
