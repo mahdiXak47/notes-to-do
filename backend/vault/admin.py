@@ -5,7 +5,7 @@ from vault.models import Folder, Note
 
 @admin.register(Folder)
 class FolderAdmin(admin.ModelAdmin):
-    list_display = ('name', 'user', 'parent', 'updated_at')
+    list_display = ('id', 'name', 'user', 'parent', 'updated_at')
     list_filter = ('user',)
     search_fields = ('name',)
     raw_id_fields = ('parent',)
@@ -13,7 +13,7 @@ class FolderAdmin(admin.ModelAdmin):
 
 @admin.register(Note)
 class NoteAdmin(admin.ModelAdmin):
-    list_display = ('name', 'user', 'folder', 'updated_at')
+    list_display = ('id', 'name', 'user', 'folder', 'updated_at')
     list_filter = ('user',)
     search_fields = ('name',)
     raw_id_fields = ('folder',)
