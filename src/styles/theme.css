@@ -1,8 +1,8 @@
-/* Cobalt #0047AB, navy #000080, sky #82C8E5; surfaces Alice blue #F0F8FF + white. */
+/* Cobalt #0047AB, navy #050557, sky #82C8E5; surfaces Alice blue #F0F8FF + white. */
 
 :root {
   --palette-cobalt: #0047ab;
-  --palette-navy: #000080;
+  --palette-navy: #050557;
   --palette-sky: #82c8e5;
   --palette-alice: #f0f8ff;
   --palette-white: #ffffff;
