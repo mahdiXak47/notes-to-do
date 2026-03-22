@@ -17,7 +17,7 @@
 }
 
 .login-title {
-  color: #000080;
+  color: var(--palette-navy);
   font-weight: 600;
 }
 
