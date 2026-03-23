@@ -26,6 +26,9 @@ export const VaultNavbar = forwardRef(function VaultNavbar(
   onLintActiveNote,
   lintBusy,
   lintMessage,
+  editorPaneMode = 'split',
+  onToggleEditorLeftPane,
+  onToggleEditorRightPane,
   },
   ref,
 ) {
@@ -187,6 +190,124 @@ export const VaultNavbar = forwardRef(function VaultNavbar(
           >
             <i className="bi bi-arrow-right" aria-hidden />
           </button>
+          <div className="sub-bar-title-wrap" aria-live="polite">
+            {activeFile ? (
+              titleEditing ? (
+                <input
+                  ref={titleInputRef}
+                  type="text"
+                  className="sub-bar-title-input"
+                  value={titleDraft}
+                  onChange={(e) => setTitleDraft(e.target.value)}
+                  onBlur={() => {
+                    if (Date.now() < titleBlurIgnoredUntilRef.current) return
+                    void commitNoteTitleEdit()
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      void commitNoteTitleEdit()
+                    }
+                    if (e.key === 'Escape') {
+                      e.preventDefault()
+                      setTitleDraft(activeFile.name)
+                      setTitleEditing(false)
+                    }
+                  }}
+                  aria-label="Note title"
+                  maxLength={255}
+                />
+              ) : (
+                <h1
+                  className="sub-bar-title sub-bar-title--clickable"
+                  onClick={() => {
+                    if (vaultLoading) return
+                    setTitleDraft(activeFile.name)
+                    setTitleEditing(true)
+                  }}
+                  onDoubleClick={(e) => {
+                    e.preventDefault()
+                    if (vaultLoading) return
+                    setTitleDraft(activeFile.name)
+                    setTitleEditing(true)
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      if (!vaultLoading) {
+                        setTitleDraft(activeFile.name)
+                        setTitleEditing(true)
+                      }
+                    }
+                  }}
+                  role="button"
+                  tabIndex={0}
+                  title="Click or double-click to rename"
+                >
+                  {activeFile.name}
+                </h1>
+              )
+            ) : (
+              <span className="sub-bar-title-placeholder text-muted" />
+            )}
+          </div>
+        </div>
+        <div className="sub-bar-center">
+          {openTabs.length > 0 ? (
+            <>
+              <button
+                type="button"
+                className="btn-icon"
+                title={
+                  editorPaneMode === 'split'
+                    ? 'Hide Markdown source'
+                    : editorPaneMode === 'preview-only'
+                      ? 'Show Markdown source'
+                      : 'Show preview only'
+                }
+                aria-label={
+                  editorPaneMode === 'split'
+                    ? 'Hide Markdown source'
+                    : editorPaneMode === 'preview-only'
+                      ? 'Show Markdown source'
+                      : 'Show preview only'
+                }
+                onClick={() => onToggleEditorLeftPane?.()}
+              >
+                <i
+                  className="bi bi-caret-left-square-fill"
+                  aria-hidden
+                />
+              </button>
+              <button
+                type="button"
+                className="btn-icon"
+                title={
+                  editorPaneMode === 'split'
+                    ? 'Hide preview'
+                    : editorPaneMode === 'source-only'
+                      ? 'Show preview'
+                      : 'Show Markdown source only'
+                }
+                aria-label={
+                  editorPaneMode === 'split'
+                    ? 'Hide preview'
+                    : editorPaneMode === 'source-only'
+                      ? 'Show preview'
+                      : 'Show Markdown source only'
+                }
+                onClick={() => onToggleEditorRightPane?.()}
+              >
+                <i
+                  className="bi bi-caret-right-square-fill"
+                  aria-hidden
+                />
+              </button>
+            </>
+          ) : null}
+        </div>
+        <div className="sub-bar-end">
           {openTabs.length > 0 ? (
             <>
               <button
@@ -205,69 +326,6 @@ export const VaultNavbar = forwardRef(function VaultNavbar(
               ) : null}
             </>
           ) : null}
-        </div>
-        <div className="sub-bar-title-wrap" aria-live="polite">
-          {activeFile ? (
-            titleEditing ? (
-              <input
-                ref={titleInputRef}
-                type="text"
-                className="sub-bar-title-input"
-                value={titleDraft}
-                onChange={(e) => setTitleDraft(e.target.value)}
-                onBlur={() => {
-                  if (Date.now() < titleBlurIgnoredUntilRef.current) return
-                  void commitNoteTitleEdit()
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault()
-                    e.stopPropagation()
-                    void commitNoteTitleEdit()
-                  }
-                  if (e.key === 'Escape') {
-                    e.preventDefault()
-                    setTitleDraft(activeFile.name)
-                    setTitleEditing(false)
-                  }
-                }}
-                aria-label="Note title"
-                maxLength={255}
-              />
-            ) : (
-              <h1
-                className="sub-bar-title sub-bar-title--clickable"
-                onClick={() => {
-                  if (vaultLoading) return
-                  setTitleDraft(activeFile.name)
-                  setTitleEditing(true)
-                }}
-                onDoubleClick={(e) => {
-                  e.preventDefault()
-                  if (vaultLoading) return
-                  setTitleDraft(activeFile.name)
-                  setTitleEditing(true)
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault()
-                    if (!vaultLoading) {
-                      setTitleDraft(activeFile.name)
-                      setTitleEditing(true)
-                    }
-                  }
-                }}
-                role="button"
-                tabIndex={0}
-                title="Click or double-click to rename"
-              >
-                {activeFile.name}
-              </h1>
-            )
-          ) : (
-            <span className="sub-bar-title-placeholder text-muted">
-            </span>
-          )}
         </div>
       </div>
     </>

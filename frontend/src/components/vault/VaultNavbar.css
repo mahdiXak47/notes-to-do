@@ -118,7 +118,7 @@
   display: grid;
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  column-gap: 0.5rem;
+  column-gap: 0.75rem;
   padding: 0.42rem 0.85rem;
   background: linear-gradient(
     180deg,
@@ -133,7 +133,25 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  justify-self: start;
+  min-width: 0;
+  justify-self: stretch;
+  justify-content: flex-start;
+}
+
+.sub-bar-center {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  justify-self: center;
+  flex-shrink: 0;
+}
+
+.sub-bar-end {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  justify-self: end;
+  justify-content: flex-end;
   min-width: 0;
 }
 
@@ -149,16 +167,14 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: min(24rem, 32vw);
+  max-width: min(18rem, 28vw);
 }
 
 .sub-bar-title-wrap {
-  justify-self: center;
+  flex: 1;
   min-width: 0;
-  max-width: min(36rem, 82vw);
-  width: 100%;
   display: flex;
-  justify-content: center;
+  justify-content: flex-start;
 }
 
 .sub-bar-title {
@@ -168,7 +184,7 @@
   font-weight: 600;
   line-height: 1.25;
   color: var(--obs-text);
-  text-align: center;
+  text-align: start;
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -194,7 +210,7 @@
 .sub-bar-title-input {
   width: 100%;
   min-width: 0;
-  max-width: min(36rem, 82vw);
+  max-width: min(28rem, 50vw);
   box-sizing: border-box;
   font-family: var(--font-title);
   font-size: 1.2rem;
@@ -206,7 +222,7 @@
   border: 1px solid rgba(0, 71, 171, 0.35);
   border-radius: 6px;
   background-color: var(--obs-bg-tab-active);
-  text-align: center;
+  text-align: start;
 }
 
 .sub-bar-title-input:focus {
@@ -219,7 +235,7 @@
   display: block;
   width: 100%;
   font-size: 0.875rem;
-  text-align: center;
+  text-align: start;
 }
 
 .sub-bar .btn-icon {

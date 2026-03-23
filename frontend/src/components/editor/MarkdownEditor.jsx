@@ -89,7 +89,7 @@ function readStoredEditorSplitPct() {
   return 50
 }
 
-export function MarkdownEditor({ file, dispatch }) {
+export function MarkdownEditor({ file, dispatch, paneMode = 'split' }) {
   const editorSplitRef = useRef(null)
   const splitDragRef = useRef({ active: false, lastPct: 50 })
   const [editorSplitLeftPct, setEditorSplitLeftPct] = useState(
@@ -143,6 +143,63 @@ export function MarkdownEditor({ file, dispatch }) {
     [editorSplitLeftPct],
   )
 
+  const sourcePane = (
+    <div className="editor-split-pane editor-split-source">
+      <textarea
+        className="md-editor md-editor--split"
+        spellCheck={false}
+        value={file.content}
+        onChange={(e) =>
+          dispatch({
+            type: 'SET_CONTENT',
+            fileId: file.id,
+            content: e.target.value,
+          })
+        }
+        placeholder="Write Markdown here (raw)…"
+        aria-label="Raw Markdown source"
+      />
+    </div>
+  )
+
+  const previewPane = (
+    <div
+      className="editor-split-pane editor-split-preview"
+      aria-label="Markdown preview"
+    >
+      <div className="md-preview">
+        {file.content.trim() ? (
+          <ReactMarkdown
+            remarkPlugins={[remarkGfm]}
+            components={MARKDOWN_BIDI_COMPONENTS}
+          >
+            {file.content}
+          </ReactMarkdown>
+        ) : (
+          <p className="md-preview-empty text-muted mb-0">
+            Preview appears here as you type.
+          </p>
+        )}
+      </div>
+    </div>
+  )
+
+  if (paneMode === 'preview-only') {
+    return (
+      <div className="editor-main">
+        <div className="editor-split editor-split--single">{previewPane}</div>
+      </div>
+    )
+  }
+
+  if (paneMode === 'source-only') {
+    return (
+      <div className="editor-main">
+        <div className="editor-split editor-split--single">{sourcePane}</div>
+      </div>
+    )
+  }
+
   return (
     <div className="editor-main">
       <div
@@ -152,22 +209,7 @@ export function MarkdownEditor({ file, dispatch }) {
           gridTemplateColumns: `minmax(0, ${editorSplitLeftPct}fr) 10px minmax(0, ${100 - editorSplitLeftPct}fr)`,
         }}
       >
-        <div className="editor-split-pane editor-split-source">
-          <textarea
-            className="md-editor md-editor--split"
-            spellCheck={false}
-            value={file.content}
-            onChange={(e) =>
-              dispatch({
-                type: 'SET_CONTENT',
-                fileId: file.id,
-                content: e.target.value,
-              })
-            }
-            placeholder="Write Markdown here (raw)…"
-            aria-label="Raw Markdown source"
-          />
-        </div>
+        {sourcePane}
         <div
           className={`editor-split-resizer ${editorSplitDragging ? 'is-dragging' : ''}`}
           role="separator"
@@ -198,25 +240,7 @@ export function MarkdownEditor({ file, dispatch }) {
         >
           <span className="editor-split-resizer-grip" aria-hidden />
         </div>
-        <div
-          className="editor-split-pane editor-split-preview"
-          aria-label="Markdown preview"
-        >
-          <div className="md-preview">
-            {file.content.trim() ? (
-              <ReactMarkdown
-                remarkPlugins={[remarkGfm]}
-                components={MARKDOWN_BIDI_COMPONENTS}
-              >
-                {file.content}
-              </ReactMarkdown>
-            ) : (
-              <p className="md-preview-empty text-muted mb-0">
-                Preview appears here as you type.
-              </p>
-            )}
-          </div>
-        </div>
+        {previewPane}
       </div>
     </div>
   )
