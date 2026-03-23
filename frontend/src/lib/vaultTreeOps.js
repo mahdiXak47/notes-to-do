@@ -1,4 +1,8 @@
-import { findBreadcrumb, pathJoined } from './vaultTreePaths.js'
+import {
+  findBreadcrumb,
+  findFolderBreadcrumb,
+  pathJoined,
+} from './vaultTreePaths.js'
 
 export function sortTree(nodes, enabled) {
   if (!enabled) return nodes
@@ -46,6 +50,25 @@ export function collectPinnedFileNodes(vault, pinnedIds) {
   out.sort((a, b) => {
     const pa = pathJoined(findBreadcrumb(vault, a.id) || [])
     const pb = pathJoined(findBreadcrumb(vault, b.id) || [])
+    return pa.localeCompare(pb, undefined, { sensitivity: 'base' })
+  })
+  return out
+}
+
+export function collectPinnedFolderNodes(vault, pinnedIds) {
+  const out = []
+  function walk(list) {
+    for (const n of list) {
+      if (n.type === 'folder') {
+        if (pinnedIds[n.id]) out.push(n)
+        walk(n.children)
+      }
+    }
+  }
+  walk(vault)
+  out.sort((a, b) => {
+    const pa = pathJoined(findFolderBreadcrumb(vault, a.id) || [])
+    const pb = pathJoined(findFolderBreadcrumb(vault, b.id) || [])
     return pa.localeCompare(pb, undefined, { sensitivity: 'base' })
   })
   return out

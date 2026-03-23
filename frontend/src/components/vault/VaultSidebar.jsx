@@ -5,6 +5,7 @@ import './VaultSidebar.css'
 import {
   findBreadcrumb,
   findFolderBreadcrumb,
+  pathJoined,
   splitDirAndFileName,
 } from '../../lib/vaultTreePaths.js'
 
@@ -35,6 +36,206 @@ function TreePathLabel({ segments, fallbackName }) {
       ) : null}
       <span className="tree-path-file">{name}</span>
     </span>
+  )
+}
+
+function PinnedFolderPathLabel({ vault, folderId, name }) {
+  const segs = findFolderBreadcrumb(vault, folderId)
+  if (!segs?.length || segs.length === 1) {
+    return (
+      <span className="tree-label text-truncate" dir="auto">
+        {name}
+      </span>
+    )
+  }
+  const full = `/${pathJoined(segs)}`
+  return (
+    <span
+      className="tree-label text-truncate tree-path-label"
+      title={full}
+      dir="auto"
+    >
+      {full}
+    </span>
+  )
+}
+
+function PinnedFolderBlock({
+  node,
+  vault,
+  pinnedIds,
+  dispatch,
+  onRequestDelete,
+  focusedFolderId,
+  onFolderRowFocus,
+  folderRenameId,
+  folderRenameDraft,
+  onFolderRenameDraftChange,
+  onStartFolderRename,
+  onCommitFolderRename,
+  onCancelFolderRename,
+  folderRenameInputRef,
+  vaultLoading,
+  onRequestNoteTitleEdit,
+  onOpenFileContextMenu,
+  onOpenFolderContextMenu,
+  activeFileId,
+  expandedOverrides,
+}) {
+  const expanded = expandedOverrides ? true : node.expanded
+  const pinned = Boolean(pinnedIds[node.id])
+  const isRenaming = folderRenameId === node.id
+  return (
+    <div
+      className="tree-folder-block"
+      style={{ paddingLeft: `${1 * 0.65}rem` }}
+    >
+      <div
+        className={`tree-row-wrap ${focusedFolderId === node.id ? 'is-folder-focused' : ''}`}
+        onContextMenu={(e) => {
+          if (vaultLoading || isRenaming) return
+          e.preventDefault()
+          onOpenFolderContextMenu(e, node)
+        }}
+      >
+        <button
+          type="button"
+          className="tree-row tree-row-chevron-btn"
+          draggable={false}
+          title={expanded ? 'Collapse folder' : 'Expand folder'}
+          aria-expanded={expanded}
+          aria-label={`${expanded ? 'Collapse' : 'Expand'} folder ${node.name}`}
+          onClick={(e) => {
+            e.stopPropagation()
+            onFolderRowFocus(node.id)
+            dispatch({ type: 'TOGGLE_FOLDER', folderId: node.id })
+          }}
+          onKeyDown={(e) => {
+            if (e.key !== 'Enter' || vaultLoading || isRenaming) return
+            e.preventDefault()
+            onStartFolderRename(node.id, node.name)
+          }}
+        >
+          <span className="tree-chevron" aria-hidden>
+            <i
+              className={`bi bi-chevron-${expanded ? 'down' : 'right'}`}
+            />
+          </span>
+        </button>
+        {isRenaming ? (
+          <input
+            ref={folderRenameInputRef}
+            type="text"
+            className="tree-folder-rename-input"
+            draggable={false}
+            value={folderRenameDraft}
+            onChange={(e) => onFolderRenameDraftChange(e.target.value)}
+            onBlur={() => void onCommitFolderRename()}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault()
+                void onCommitFolderRename()
+              }
+              if (e.key === 'Escape') {
+                e.preventDefault()
+                onCancelFolderRename()
+              }
+            }}
+            aria-label="Folder name"
+            maxLength={255}
+            onClick={(e) => e.stopPropagation()}
+          />
+        ) : (
+          <button
+            type="button"
+            className="tree-row tree-row-main tree-row-folder-label"
+            draggable={false}
+            title="Double-click or press Enter to rename"
+            onClick={() => onFolderRowFocus(node.id)}
+            onDoubleClick={(e) => {
+              e.preventDefault()
+              if (!vaultLoading) onStartFolderRename(node.id, node.name)
+            }}
+            onKeyDown={(e) => {
+              if (e.key !== 'Enter' || vaultLoading) return
+              e.preventDefault()
+              onStartFolderRename(node.id, node.name)
+            }}
+          >
+            <PinnedFolderPathLabel
+              vault={vault}
+              folderId={node.id}
+              name={node.name}
+            />
+          </button>
+        )}
+        <div className="tree-row-actions">
+          <button
+            type="button"
+            className={`tree-row-action-btn ${pinned ? 'is-active' : ''}`}
+            title={pinned ? 'Unpin' : 'Pin path'}
+            aria-label={pinned ? 'Unpin folder' : 'Pin folder path'}
+            draggable={false}
+            onClick={(e) => {
+              e.stopPropagation()
+              dispatch({ type: 'TOGGLE_PIN', id: node.id })
+            }}
+          >
+            <i
+              className={pinned ? 'bi bi-pin-fill' : 'bi bi-pin-angle'}
+              aria-hidden
+            />
+          </button>
+          <button
+            type="button"
+            className="tree-row-action-btn tree-row-action-danger"
+            title="Delete folder"
+            aria-label={`Delete folder ${node.name}`}
+            draggable={false}
+            onClick={(e) => {
+              e.stopPropagation()
+              onRequestDelete({
+                kind: 'folder',
+                id: node.id,
+                name: node.name,
+                folderNonEmpty: Boolean(
+                  node.children && node.children.length > 0,
+                ),
+              })
+            }}
+          >
+            <i className="bi bi-trash3" aria-hidden />
+          </button>
+        </div>
+      </div>
+      {expanded && node.children && node.children.length > 0 ? (
+        <div className="tree-folder-children">
+          <TreeRows
+            nodes={node.children}
+            depth={2}
+            activeFileId={activeFileId}
+            dispatch={dispatch}
+            expandedOverrides={expandedOverrides}
+            vault={vault}
+            pinnedIds={pinnedIds}
+            onRequestDelete={onRequestDelete}
+            focusedFolderId={focusedFolderId}
+            onFolderRowFocus={onFolderRowFocus}
+            folderRenameId={folderRenameId}
+            folderRenameDraft={folderRenameDraft}
+            onFolderRenameDraftChange={onFolderRenameDraftChange}
+            onStartFolderRename={onStartFolderRename}
+            onCommitFolderRename={onCommitFolderRename}
+            onCancelFolderRename={onCancelFolderRename}
+            folderRenameInputRef={folderRenameInputRef}
+            vaultLoading={vaultLoading}
+            onRequestNoteTitleEdit={onRequestNoteTitleEdit}
+            onOpenFileContextMenu={onOpenFileContextMenu}
+            onOpenFolderContextMenu={onOpenFolderContextMenu}
+          />
+        </div>
+      ) : null}
+    </div>
   )
 }
 
@@ -155,9 +356,7 @@ function TreeRows({
   for (const node of nodes) {
     if (node.type === 'folder') {
       const expanded = expandedOverrides ? true : node.expanded
-      const folderSegs = findFolderBreadcrumb(vault, node.id)
       const pinned = Boolean(pinnedIds[node.id])
-      const usePath = Boolean(pinned && folderSegs?.length)
       const isRenaming = folderRenameId === node.id
       rows.push(
         <div
@@ -237,10 +436,18 @@ function TreeRows({
                   onStartFolderRename(node.id, node.name)
                 }}
               >
-                <TreePathLabel
-                  segments={usePath ? folderSegs : null}
-                  fallbackName={node.name}
-                />
+                {pinned ? (
+                  <PinnedFolderPathLabel
+                    vault={vault}
+                    folderId={node.id}
+                    name={node.name}
+                  />
+                ) : (
+                  <TreePathLabel
+                    segments={null}
+                    fallbackName={node.name}
+                  />
+                )}
               </button>
             )}
             <div className="tree-row-actions">
@@ -409,6 +616,7 @@ export function VaultSidebar({
   pinnedIds,
   activeFileId,
   dispatch,
+  pinnedFolderNodes,
   pinnedFileNodes,
   mainTreeNodes,
   pinnedSectionOpen,
@@ -597,7 +805,8 @@ export function VaultSidebar({
               {vaultLoading ? (
                 <div className="p-3 text-muted small">Loading vault…</div>
               ) : null}
-              {!vaultLoading && pinnedFileNodes.length > 0 ? (
+              {!vaultLoading &&
+              (pinnedFolderNodes.length > 0 || pinnedFileNodes.length > 0) ? (
                 <div className="sidebar-pinned-block">
                   <div className="sidebar-pinned-header-row">
                     <div className="tree-row-wrap sidebar-pinned-folder-wrap">
@@ -613,13 +822,38 @@ export function VaultSidebar({
                           />
                         </span>
                         <span className="tree-label text-truncate">
-                          Pinned files
+                          Pinned
                         </span>
                       </button>
                     </div>
                   </div>
                   {pinnedSectionOpen ? (
                     <div className="tree-folder-children">
+                      {pinnedFolderNodes.map((node) => (
+                        <PinnedFolderBlock
+                          key={node.id}
+                          node={node}
+                          vault={vault}
+                          pinnedIds={pinnedIds}
+                          dispatch={dispatch}
+                          onRequestDelete={onRequestDelete}
+                          focusedFolderId={focusedFolderId}
+                          onFolderRowFocus={onFolderRowFocus}
+                          folderRenameId={folderRenameId}
+                          folderRenameDraft={folderRenameDraft}
+                          onFolderRenameDraftChange={onFolderRenameDraftChange}
+                          onStartFolderRename={onStartFolderRename}
+                          onCommitFolderRename={onCommitFolderRename}
+                          onCancelFolderRename={onCancelFolderRename}
+                          folderRenameInputRef={folderRenameInputRef}
+                          vaultLoading={vaultLoading}
+                          onRequestNoteTitleEdit={onRequestNoteTitleEdit}
+                          onOpenFileContextMenu={openFileContextMenu}
+                          onOpenFolderContextMenu={openFolderContextMenu}
+                          activeFileId={activeFileId}
+                          expandedOverrides={Boolean(searchQuery.trim())}
+                        />
+                      ))}
                       {pinnedFileNodes.map((node) => (
                         <FileTreeRow
                           key={node.id}

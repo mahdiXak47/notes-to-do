@@ -36,6 +36,7 @@ import { initialVaultState, vaultReducer } from '../lib/vaultReducer.js'
 import {
   collectDescendantFolderIdsIncludingSelf,
   collectPinnedFileNodes,
+  collectPinnedFolderNodes,
   filterTree,
   findFolderNode,
   sortTree,
@@ -242,6 +243,11 @@ function App({ onLogout = () => {}, username = '' }) {
 
   const pinnedFileNodes = useMemo(
     () => collectPinnedFileNodes(state.vault, state.pinnedIds),
+    [state.vault, state.pinnedIds],
+  )
+
+  const pinnedFolderNodes = useMemo(
+    () => collectPinnedFolderNodes(state.vault, state.pinnedIds),
     [state.vault, state.pinnedIds],
   )
 
@@ -460,6 +466,7 @@ function App({ onLogout = () => {}, username = '' }) {
           pinnedIds={state.pinnedIds}
           activeFileId={state.activeFileId}
           dispatch={dispatch}
+          pinnedFolderNodes={pinnedFolderNodes}
           pinnedFileNodes={pinnedFileNodes}
           mainTreeNodes={mainTreeNodes}
           pinnedSectionOpen={pinnedSectionOpen}
