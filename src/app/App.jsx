@@ -77,6 +77,7 @@ function App({ onLogout = () => {}, username = '' }) {
   const [lintBusy, setLintBusy] = useState(false)
   const [lintMessage, setLintMessage] = useState('')
   const lintMessageClearRef = useRef(null)
+  const [editorPaneMode, setEditorPaneMode] = useState('split')
   const modLabel = useMemo(() => modKeyLabel(), [])
 
   const syncVaultFromServer = useCallback(async () => {
@@ -484,11 +485,30 @@ function App({ onLogout = () => {}, username = '' }) {
     if (state.openTabs.length > 0) return
     setLintMessage('')
     setLintBusy(false)
+    setEditorPaneMode('split')
     if (lintMessageClearRef.current != null) {
       window.clearTimeout(lintMessageClearRef.current)
       lintMessageClearRef.current = null
     }
   }, [state.openTabs.length])
+
+  const toggleEditorLeftPane = useCallback(() => {
+    setEditorPaneMode((m) => {
+      if (m === 'split') return 'preview-only'
+      if (m === 'preview-only') return 'split'
+      if (m === 'source-only') return 'preview-only'
+      return m
+    })
+  }, [])
+
+  const toggleEditorRightPane = useCallback(() => {
+    setEditorPaneMode((m) => {
+      if (m === 'split') return 'source-only'
+      if (m === 'source-only') return 'split'
+      if (m === 'preview-only') return 'source-only'
+      return m
+    })
+  }, [])
 
   const onLintActiveNote = useCallback(async () => {
     if (!activeFile || lintBusy) return
@@ -576,10 +596,17 @@ function App({ onLogout = () => {}, username = '' }) {
             onLintActiveNote={onLintActiveNote}
             lintBusy={lintBusy}
             lintMessage={lintMessage}
+            editorPaneMode={editorPaneMode}
+            onToggleEditorLeftPane={toggleEditorLeftPane}
+            onToggleEditorRightPane={toggleEditorRightPane}
           />
 
           {activeFile ? (
-            <MarkdownEditor file={activeFile} dispatch={dispatch} />
+            <MarkdownEditor
+              file={activeFile}
+              dispatch={dispatch}
+              paneMode={editorPaneMode}
+            />
           ) : (
             <EditorEmptyState
               vaultLoading={vaultLoading}
