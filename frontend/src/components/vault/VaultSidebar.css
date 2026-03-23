@@ -76,6 +76,10 @@
 .sidebar-expand-rail-account {
   margin-top: auto;
   padding-bottom: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.12rem;
 }
 
 .sidebar-expand-rail-btn {
@@ -209,18 +213,49 @@
 .sidebar-footer {
   flex-shrink: 0;
   margin-top: auto;
-  padding: 0.5rem 0.65rem;
+  padding: 0.42rem 0.55rem 0.48rem;
   border-top: 1px solid var(--obs-border);
-  font-size: 0.75rem;
+  font-size: 0.6875rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.5rem;
+  gap: 0.45rem;
+}
+
+.sidebar-footer-start {
+  display: flex;
+  align-items: center;
+  gap: 0.28rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.sidebar-footer-vault-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 1.35rem;
+  height: 1.35rem;
+  color: var(--obs-icon-dim);
+  font-size: 0.78rem;
+  line-height: 1;
+  opacity: 0.92;
 }
 
 .sidebar-footer-user {
   color: var(--obs-text-muted);
   min-width: 0;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+
+.sidebar-footer-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.05rem;
+  flex-shrink: 0;
 }
 
 .sidebar-footer-menu-wrap {
@@ -228,15 +263,15 @@
   flex-shrink: 0;
 }
 
-.sidebar-footer-gear {
+.sidebar-footer-icon-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 1.75rem;
-  height: 1.75rem;
+  width: 1.65rem;
+  height: 1.65rem;
   padding: 0;
   border: none;
-  border-radius: 6px;
+  border-radius: 4px;
   background: transparent;
   color: var(--obs-text-muted);
   font-size: 1rem;
@@ -244,9 +279,14 @@
   cursor: pointer;
 }
 
-.sidebar-footer-gear:hover {
+.sidebar-footer-icon-btn:hover {
   color: var(--obs-text);
   background-color: rgba(255, 255, 255, 0.06);
+}
+
+.sidebar-footer-icon-btn:focus-visible {
+  outline: 2px solid var(--obs-text-muted);
+  outline-offset: 1px;
 }
 
 .sidebar-footer-popover {

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { apiUrl } from '../../lib/auth.js'
+import { AboutModal } from '../modals/AboutModal.jsx'
 import { VaultContextMenu } from './VaultContextMenu.jsx'
 import './VaultSidebar.css'
 import {
@@ -552,7 +553,7 @@ function SidebarAccountMenu({
     <div className="sidebar-footer-menu-wrap" ref={menuWrapRef}>
       <button
         type="button"
-        className="sidebar-footer-gear"
+        className="sidebar-footer-icon-btn"
         aria-expanded={footerMenuOpen}
         aria-haspopup="menu"
         aria-controls="sidebar-footer-settings-menu"
@@ -641,6 +642,7 @@ export function VaultSidebar({
 }) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(readSidebarCollapsed)
   const [footerMenuOpen, setFooterMenuOpen] = useState(false)
+  const [aboutModalOpen, setAboutModalOpen] = useState(false)
   const [ctxMenu, setCtxMenu] = useState(null)
   const sidebarFooterRef = useRef(null)
   const collapsedAccountMenuRef = useRef(null)
@@ -682,6 +684,10 @@ export function VaultSidebar({
 
   return (
     <>
+      <AboutModal
+        open={aboutModalOpen}
+        onClose={() => setAboutModalOpen(false)}
+      />
       <VaultContextMenu
         open={Boolean(ctxMenu)}
         x={ctxMenu?.x ?? 0}
@@ -902,15 +908,38 @@ export function VaultSidebar({
               ) : null}
             </div>
             <div className="sidebar-footer" ref={sidebarFooterRef}>
-              <div className="sidebar-footer-user text-truncate" title={username}>
-                {username}
+              <div className="sidebar-footer-start">
+                <span
+                  className="sidebar-footer-vault-icon"
+                  aria-hidden="true"
+                  title="Vault"
+                >
+                  <i className="bi bi-arrow-down-up" />
+                </span>
+                <div
+                  className="sidebar-footer-user text-truncate"
+                  title={username}
+                >
+                  {username}
+                </div>
               </div>
-              <SidebarAccountMenu
-                footerMenuOpen={footerMenuOpen}
-                setFooterMenuOpen={setFooterMenuOpen}
-                setSettingsModalOpen={setSettingsModalOpen}
-                onLogout={onLogout}
-              />
+              <div className="sidebar-footer-actions">
+                <button
+                  type="button"
+                  className="sidebar-footer-icon-btn"
+                  title="About this application"
+                  aria-label="About this application"
+                  onClick={() => setAboutModalOpen(true)}
+                >
+                  <i className="bi bi-question-circle" aria-hidden />
+                </button>
+                <SidebarAccountMenu
+                  footerMenuOpen={footerMenuOpen}
+                  setFooterMenuOpen={setFooterMenuOpen}
+                  setSettingsModalOpen={setSettingsModalOpen}
+                  onLogout={onLogout}
+                />
+              </div>
             </div>
           </>
         ) : null}
@@ -928,6 +957,15 @@ export function VaultSidebar({
             <i className="bi bi-layout-sidebar-inset-reverse" aria-hidden />
           </button>
           <div className="sidebar-expand-rail-account">
+            <button
+              type="button"
+              className="sidebar-footer-icon-btn"
+              title="About this application"
+              aria-label="About this application"
+              onClick={() => setAboutModalOpen(true)}
+            >
+              <i className="bi bi-question-circle" aria-hidden />
+            </button>
             <SidebarAccountMenu
               menuWrapRef={collapsedAccountMenuRef}
               railPopover
