@@ -54,6 +54,16 @@ import { useVaultKeyboardShortcuts } from '../hooks/useVaultKeyboardShortcuts.js
 import { lintAndFixMarkdown } from '../lib/markdownLintFix.js'
 
 const SKIP_DELETE_CONFIRM_KEY = 'notes_skip_delete_confirm'
+const LINE_NUMBERS_STORAGE_KEY = 'notes_editor_line_numbers'
+const LINT_TOAST_DURATION_MS = 6000
+
+function readStoredLineNumbersVisible() {
+  try {
+    return localStorage.getItem(LINE_NUMBERS_STORAGE_KEY) !== '0'
+  } catch {
+    return true
+  }
+}
 
 function modKeyLabel() {
   if (typeof navigator === 'undefined') return 'Ctrl'
@@ -76,9 +86,29 @@ function App({ onLogout = () => {}, username = '' }) {
   const [moveModal, setMoveModal] = useState(null)
   const [lintBusy, setLintBusy] = useState(false)
   const [lintMessage, setLintMessage] = useState('')
-  const lintMessageClearRef = useRef(null)
+  const lintProgressFillRef = useRef(null)
+  const lintToastRafRef = useRef(null)
+  const lintToastDeadlineRef = useRef(null)
+  const lintToastInitialMsRef = useRef(LINT_TOAST_DURATION_MS)
+  const lintToastPausedRef = useRef(false)
+  const lintToastRemainingMsRef = useRef(null)
   const [editorPaneMode, setEditorPaneMode] = useState('split')
+  const [editorLineNumbersVisible, setEditorLineNumbersVisible] = useState(
+    readStoredLineNumbersVisible,
+  )
   const modLabel = useMemo(() => modKeyLabel(), [])
+
+  const toggleEditorLineNumbers = useCallback(() => {
+    setEditorLineNumbersVisible((v) => {
+      const next = !v
+      try {
+        localStorage.setItem(LINE_NUMBERS_STORAGE_KEY, next ? '1' : '0')
+      } catch {
+        /* ignore quota / private mode. */
+      }
+      return next
+    })
+  }, [])
 
   const syncVaultFromServer = useCallback(async () => {
     const expanded = collectExpandedByFolderId(vaultRef.current)
@@ -462,35 +492,92 @@ function App({ onLogout = () => {}, username = '' }) {
     setVaultError(message)
   }, [])
 
-  const showLintMessage = useCallback((message) => {
-    if (lintMessageClearRef.current != null) {
-      window.clearTimeout(lintMessageClearRef.current)
+  const stopLintToastAnimation = useCallback(() => {
+    if (lintToastRafRef.current != null) {
+      cancelAnimationFrame(lintToastRafRef.current)
+      lintToastRafRef.current = null
     }
+  }, [])
+
+  const dismissLintToast = useCallback(() => {
+    stopLintToastAnimation()
+    lintToastDeadlineRef.current = null
+    lintToastPausedRef.current = false
+    lintToastRemainingMsRef.current = null
+    setLintMessage('')
+  }, [stopLintToastAnimation])
+
+  const runLintToastLoop = useCallback(() => {
+    stopLintToastAnimation()
+    const loop = (now) => {
+      const fill = lintProgressFillRef.current
+      const deadline = lintToastDeadlineRef.current
+      const initial = lintToastInitialMsRef.current
+      if (!fill || deadline == null) return
+      if (lintToastPausedRef.current) return
+
+      const remaining = Math.max(0, deadline - now)
+      const progress =
+        initial > 0 ? Math.min(1, (initial - remaining) / initial) : 1
+      fill.style.transform = `scaleX(${progress})`
+
+      if (remaining <= 0) {
+        dismissLintToast()
+        return
+      }
+      lintToastRafRef.current = requestAnimationFrame(loop)
+    }
+    lintToastRafRef.current = requestAnimationFrame(loop)
+  }, [dismissLintToast, stopLintToastAnimation])
+
+  const showLintMessage = useCallback((message) => {
     setLintMessage(message)
-    lintMessageClearRef.current = window.setTimeout(() => {
-      setLintMessage('')
-      lintMessageClearRef.current = null
-    }, 6000)
   }, [])
 
   useEffect(() => {
-    return () => {
-      if (lintMessageClearRef.current != null) {
-        window.clearTimeout(lintMessageClearRef.current)
-      }
+    if (!lintMessage) {
+      stopLintToastAnimation()
+      lintToastDeadlineRef.current = null
+      lintToastPausedRef.current = false
+      lintToastRemainingMsRef.current = null
+      return
     }
-  }, [])
+    lintToastPausedRef.current = false
+    lintToastInitialMsRef.current = LINT_TOAST_DURATION_MS
+    lintToastDeadlineRef.current = performance.now() + LINT_TOAST_DURATION_MS
+    requestAnimationFrame(() => {
+      const el = lintProgressFillRef.current
+      if (el) el.style.transform = 'scaleX(0)'
+    })
+    runLintToastLoop()
+    return () => stopLintToastAnimation()
+  }, [lintMessage, runLintToastLoop, stopLintToastAnimation])
+
+  const onLintToastPointerEnter = useCallback(() => {
+    const deadline = lintToastDeadlineRef.current
+    if (deadline == null) return
+    const now = performance.now()
+    lintToastRemainingMsRef.current = Math.max(0, deadline - now)
+    lintToastPausedRef.current = true
+    stopLintToastAnimation()
+  }, [stopLintToastAnimation])
+
+  const onLintToastPointerLeave = useCallback(() => {
+    if (!lintToastPausedRef.current) return
+    lintToastPausedRef.current = false
+    const rem = lintToastRemainingMsRef.current ?? 0
+    lintToastDeadlineRef.current = performance.now() + rem
+    lintToastRemainingMsRef.current = null
+    runLintToastLoop()
+  }, [runLintToastLoop])
 
   useEffect(() => {
     if (state.openTabs.length > 0) return
+    stopLintToastAnimation()
     setLintMessage('')
     setLintBusy(false)
     setEditorPaneMode('split')
-    if (lintMessageClearRef.current != null) {
-      window.clearTimeout(lintMessageClearRef.current)
-      lintMessageClearRef.current = null
-    }
-  }, [state.openTabs.length])
+  }, [state.openTabs.length, stopLintToastAnimation])
 
   const toggleEditorLeftPane = useCallback(() => {
     setEditorPaneMode((m) => {
@@ -515,8 +602,12 @@ function App({ onLogout = () => {}, username = '' }) {
     setLintBusy(true)
     setLintMessage('')
     try {
-      const { text, initialIssueCount, remainingIssueCount } =
-        await lintAndFixMarkdown(activeFile.content)
+      const {
+        text,
+        initialIssueCount,
+        remainingIssueCount,
+        remainingIssues,
+      } = await lintAndFixMarkdown(activeFile.content)
       if (text !== activeFile.content) {
         dispatch({
           type: 'SET_CONTENT',
@@ -531,8 +622,22 @@ function App({ onLogout = () => {}, username = '' }) {
           `Applied auto-fixes for ${initialIssueCount} issue(s). All clear.`,
         )
       } else {
+        const sorted = [...remainingIssues].sort(
+          (a, b) =>
+            a.lineNumber - b.lineNumber ||
+            String(a.ruleName).localeCompare(String(b.ruleName)),
+        )
+        const maxDetail = 18
+        const detailLines = sorted.slice(0, maxDetail).map((i) => {
+          const extra = i.detail ? ` (${i.detail})` : ''
+          return `Line ${i.lineNumber}: ${i.ruleName} ${i.description}${extra}`
+        })
+        let body = detailLines.join('\n')
+        if (sorted.length > maxDetail) {
+          body += `\n… and ${sorted.length - maxDetail} more.`
+        }
         showLintMessage(
-          `Applied fixes where possible. ${remainingIssueCount} issue(s) still need manual edits.`,
+          `Applied fixes where possible.\nWarnings (optional review):\n${body}`,
         )
       }
     } catch (e) {
@@ -595,10 +700,11 @@ function App({ onLogout = () => {}, username = '' }) {
             onRenameNoteError={onRenameNoteError}
             onLintActiveNote={onLintActiveNote}
             lintBusy={lintBusy}
-            lintMessage={lintMessage}
             editorPaneMode={editorPaneMode}
             onToggleEditorLeftPane={toggleEditorLeftPane}
             onToggleEditorRightPane={toggleEditorRightPane}
+            showEditorLineNumbers={editorLineNumbersVisible}
+            onToggleEditorLineNumbers={toggleEditorLineNumbers}
           />
 
           {activeFile ? (
@@ -606,6 +712,7 @@ function App({ onLogout = () => {}, username = '' }) {
               file={activeFile}
               dispatch={dispatch}
               paneMode={editorPaneMode}
+              showLineNumbers={editorLineNumbersVisible}
             />
           ) : (
             <EditorEmptyState
@@ -619,6 +726,35 @@ function App({ onLogout = () => {}, username = '' }) {
           )}
         </section>
       </div>
+
+      {lintMessage ? (
+        <div
+          className="lint-toast"
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+          onPointerEnter={onLintToastPointerEnter}
+          onPointerLeave={onLintToastPointerLeave}
+        >
+          <div className="lint-toast-body">
+            <span className="lint-toast-text">{lintMessage}</span>
+            <button
+              type="button"
+              className="lint-toast-dismiss"
+              aria-label="Dismiss notification"
+              onClick={dismissLintToast}
+            >
+              <i className="bi bi-x-lg" aria-hidden />
+            </button>
+          </div>
+          <div className="lint-toast-progress-track" aria-hidden="true">
+            <div
+              ref={lintProgressFillRef}
+              className="lint-toast-progress-fill"
+            />
+          </div>
+        </div>
+      ) : null}
 
       <QuickOpenDialog
         open={quickOpenOpen}

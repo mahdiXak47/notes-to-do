@@ -18,9 +18,94 @@
   flex-direction: column;
   background-color: var(--obs-bg-editor);
   min-height: 0;
+  --editor-pane-inline: 0.85rem;
   --obs-text: #0d1b2a;
   --obs-text-muted: #3d5d78;
   --obs-border: rgba(0, 71, 171, 0.18);
   --obs-icon-dim: #5a7a95;
   --obs-selection: rgba(0, 71, 171, 0.12);
+}
+
+.lint-toast {
+  position: fixed;
+  z-index: 1080;
+  right: 1rem;
+  bottom: 1rem;
+  max-width: min(28rem, calc(100vw - 2rem));
+  max-height: min(50vh, 20rem);
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+  padding: 0;
+  border-radius: 8px;
+  border: 1px solid rgba(0, 71, 171, 0.2);
+  background-color: #ffffff;
+  color: #1a3044;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  box-shadow: 0 6px 24px rgba(0, 35, 80, 0.18);
+  overflow: hidden;
+}
+
+.lint-toast-body {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  padding: 0.65rem 0.5rem 0.55rem 0.85rem;
+  flex: 1;
+  min-height: 0;
+}
+
+.lint-toast-text {
+  flex: 1;
+  min-width: 0;
+  max-height: min(46vh, 18.5rem);
+  overflow-y: auto;
+  padding-top: 0.1rem;
+  white-space: pre-line;
+  word-break: break-word;
+}
+
+.lint-toast-progress-track {
+  flex-shrink: 0;
+  height: 3px;
+  width: 100%;
+  background-color: rgba(0, 71, 171, 0.1);
+}
+
+.lint-toast-progress-fill {
+  height: 100%;
+  width: 100%;
+  transform-origin: left center;
+  transform: scaleX(0);
+  background: linear-gradient(90deg, #0047ab 0%, #3d7dcc 55%, #82c8e5 100%);
+  will-change: transform;
+}
+
+.lint-toast-dismiss {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  margin: -0.15rem -0.15rem -0.15rem 0;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #5a7a95;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.lint-toast-dismiss:hover {
+  color: #0d1b2a;
+  background-color: rgba(0, 71, 171, 0.08);
+}
+
+.lint-toast-dismiss:focus-visible {
+  outline: 2px solid rgba(0, 71, 171, 0.45);
+  outline-offset: 1px;
 }

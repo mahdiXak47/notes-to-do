@@ -25,10 +25,11 @@ export const VaultNavbar = forwardRef(function VaultNavbar(
   onRenameNoteError,
   onLintActiveNote,
   lintBusy,
-  lintMessage,
   editorPaneMode = 'split',
   onToggleEditorLeftPane,
   onToggleEditorRightPane,
+  showEditorLineNumbers = true,
+  onToggleEditorLineNumbers,
   },
   ref,
 ) {
@@ -304,6 +305,25 @@ export const VaultNavbar = forwardRef(function VaultNavbar(
                   aria-hidden
                 />
               </button>
+              <button
+                type="button"
+                className="btn-icon"
+                title={
+                  showEditorLineNumbers
+                    ? 'Hide line numbers'
+                    : 'Show line numbers'
+                }
+                aria-label={
+                  showEditorLineNumbers
+                    ? 'Hide line numbers in source editor'
+                    : 'Show line numbers in source editor'
+                }
+                aria-pressed={showEditorLineNumbers}
+                disabled={!onToggleEditorLineNumbers}
+                onClick={() => onToggleEditorLineNumbers?.()}
+              >
+                <i className="bi bi-list-ol" aria-hidden />
+              </button>
             </>
           ) : null}
         </div>
@@ -319,11 +339,6 @@ export const VaultNavbar = forwardRef(function VaultNavbar(
               >
                 {lintBusy ? 'Linting...' : 'Lint'}
               </button>
-              {lintMessage ? (
-                <span className="sub-bar-inline-status" role="status">
-                  {lintMessage}
-                </span>
-              ) : null}
             </>
           ) : null}
         </div>

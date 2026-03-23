@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import './MarkdownEditor.css'
@@ -75,6 +75,79 @@ const MARKDOWN_BIDI_COMPONENTS = {
 const EDITOR_SPLIT_STORAGE_KEY = 'notes_editor_split_pct'
 const EDITOR_SPLIT_MIN = 18
 const EDITOR_SPLIT_MAX = 82
+const TAB_CHAR = '\t'
+
+function lineIndexAt(value, pos) {
+  return value.slice(0, pos).split('\n').length - 1
+}
+
+function mapCaretAfterBlockReplace(startLine, oldBlock, newBlock, pos) {
+  if (pos <= startLine) return pos
+  const oldEnd = startLine + oldBlock.length
+  if (pos >= oldEnd) return pos + (newBlock.length - oldBlock.length)
+  const oLines = oldBlock.split('\n')
+  const nLines = newBlock.split('\n')
+  let accOld = 0
+  let accNew = 0
+  for (let i = 0; i < oLines.length; i++) {
+    const oLine = oLines[i]
+    const nLine = nLines[i] ?? ''
+    const lineStartOld = startLine + accOld
+    const lineEndOldExcl = lineStartOld + oLine.length
+    if (pos <= lineEndOldExcl) {
+      const col = pos - lineStartOld
+      const removed = oLine.length - nLine.length
+      return startLine + accNew + Math.max(0, col - removed)
+    }
+    const nl = i < oLines.length - 1 ? 1 : 0
+    accOld += oLine.length + nl
+    accNew += nLine.length + nl
+  }
+  return pos + (newBlock.length - oldBlock.length)
+}
+
+function applyTabToMarkdown(value, selStart, selEnd, shiftKey) {
+  const s = Math.min(selStart, selEnd)
+  const e = Math.max(selStart, selEnd)
+  if (s === e) {
+    const next = value.slice(0, s) + TAB_CHAR + value.slice(e)
+    return { next, caretStart: s + 1, caretEnd: s + 1 }
+  }
+  const startLine = value.lastIndexOf('\n', s - 1) + 1
+  let endLine = value.indexOf('\n', e - 1)
+  if (endLine === -1) {
+    endLine = value.length
+  } else {
+    endLine += 1
+  }
+  const block = value.slice(startLine, endLine)
+  const lines = block.split('\n')
+  const newLines = lines.map((line) => {
+    if (shiftKey) {
+      if (line.startsWith(TAB_CHAR)) return line.slice(1)
+      if (line.startsWith('  ')) return line.slice(2)
+      return line
+    }
+    return TAB_CHAR + line
+  })
+  const newBlock = newLines.join('\n')
+  const next = value.slice(0, startLine) + newBlock + value.slice(endLine)
+  const baseLine = lineIndexAt(value, startLine)
+  const sLine = lineIndexAt(value, s)
+  const eLine = lineIndexAt(value, Math.max(s, e - 1))
+  if (shiftKey) {
+    return {
+      next,
+      caretStart: mapCaretAfterBlockReplace(startLine, block, newBlock, s),
+      caretEnd: mapCaretAfterBlockReplace(startLine, block, newBlock, e),
+    }
+  }
+  return {
+    next,
+    caretStart: s + (sLine - baseLine + 1),
+    caretEnd: e + (eLine - baseLine + 1),
+  }
+}
 
 function readStoredEditorSplitPct() {
   try {
@@ -89,13 +162,87 @@ function readStoredEditorSplitPct() {
   return 50
 }
 
-export function MarkdownEditor({ file, dispatch, paneMode = 'split' }) {
+export function MarkdownEditor({
+  file,
+  dispatch,
+  paneMode = 'split',
+  showLineNumbers = true,
+}) {
   const editorSplitRef = useRef(null)
+  const sourceTextareaRef = useRef(null)
+  const gutterRef = useRef(null)
+  const pendingSourceSelectionRef = useRef(null)
   const splitDragRef = useRef({ active: false, lastPct: 50 })
   const [editorSplitLeftPct, setEditorSplitLeftPct] = useState(
     readStoredEditorSplitPct,
   )
   const [editorSplitDragging, setEditorSplitDragging] = useState(false)
+
+  const lineCount = useMemo(() => {
+    if (file.content.length === 0) return 1
+    return file.content.split('\n').length
+  }, [file.content])
+
+  const gutterText = useMemo(
+    () => Array.from({ length: lineCount }, (_, i) => String(i + 1)).join('\n'),
+    [lineCount],
+  )
+
+  const gutterStyle = useMemo(
+    () => ({ minWidth: `${Math.max(2, String(lineCount).length) + 1}ch` }),
+    [lineCount],
+  )
+
+  useLayoutEffect(() => {
+    if (!showLineNumbers) return
+    const ta = sourceTextareaRef.current
+    const g = gutterRef.current
+    if (ta && g) g.scrollTop = ta.scrollTop
+  }, [showLineNumbers, lineCount])
+
+  useLayoutEffect(() => {
+    const p = pendingSourceSelectionRef.current
+    if (!p) return
+    if (p.fileId !== file.id) {
+      pendingSourceSelectionRef.current = null
+      return
+    }
+    pendingSourceSelectionRef.current = null
+    const el = sourceTextareaRef.current
+    if (!el) return
+    el.setSelectionRange(p.start, p.end)
+  }, [file.content, file.id])
+
+  const onSourceKeyDown = useCallback(
+    (e) => {
+      if (e.key !== 'Tab') return
+      e.preventDefault()
+      const el = e.currentTarget
+      const { selectionStart, selectionEnd } = el
+      const { next, caretStart, caretEnd } = applyTabToMarkdown(
+        file.content,
+        selectionStart,
+        selectionEnd,
+        e.shiftKey,
+      )
+      pendingSourceSelectionRef.current = {
+        fileId: file.id,
+        start: caretStart,
+        end: caretEnd,
+      }
+      dispatch({
+        type: 'SET_CONTENT',
+        fileId: file.id,
+        content: next,
+      })
+    },
+    [dispatch, file.content, file.id],
+  )
+
+  const onSourceScroll = useCallback((e) => {
+    const g = gutterRef.current
+    if (g) g.scrollTop = e.currentTarget.scrollTop
+  }, [])
 
   const onEditorSplitPointerDown = useCallback(
     (e) => {
@@ -145,20 +292,42 @@ export function MarkdownEditor({ file, dispatch, paneMode = 'split' }) {
 
   const sourcePane = (
     <div className="editor-split-pane editor-split-source">
-      <textarea
-        className="md-editor md-editor--split"
-        spellCheck={false}
-        value={file.content}
-        onChange={(e) =>
-          dispatch({
-            type: 'SET_CONTENT',
-            fileId: file.id,
-            content: e.target.value,
-          })
+      <div
+        className={
+          showLineNumbers
+            ? 'editor-source-shell editor-source-shell--with-gutter'
+            : 'editor-source-shell'
         }
-        placeholder="Write Markdown here (raw)…"
-        aria-label="Raw Markdown source"
-      />
+      >
+        {showLineNumbers ? (
+          <pre
+            ref={gutterRef}
+            className="editor-line-gutter"
+            dir="ltr"
+            style={gutterStyle}
+            aria-hidden="true"
+          >
+            {gutterText}
+          </pre>
+        ) : null}
+        <textarea
+          ref={sourceTextareaRef}
+          className="md-editor md-editor--split"
+          spellCheck={false}
+          value={file.content}
+          onChange={(e) =>
+            dispatch({
+              type: 'SET_CONTENT',
+              fileId: file.id,
+              content: e.target.value,
+            })
+          }
+          onKeyDown={onSourceKeyDown}
+          onScroll={onSourceScroll}
+          placeholder="Write Markdown here (raw)…"
+          aria-label="Raw Markdown source"
+        />
+      </div>
     </div>
   )
 
