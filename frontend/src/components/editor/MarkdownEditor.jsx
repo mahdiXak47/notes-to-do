@@ -35,6 +35,11 @@ function MarkdownCode(props) {
   return <code {...rest}>{children}</code>
 }
 
+function MarkdownLi(props) {
+  const { node: _node, ...rest } = props
+  return <li {...rest} />
+}
+
 const MARKDOWN_BIDI_COMPONENTS = {
   p: withDirAuto('p'),
   h1: withDirAuto('h1'),
@@ -45,7 +50,7 @@ const MARKDOWN_BIDI_COMPONENTS = {
   h6: withDirAuto('h6'),
   ul: withDirAuto('ul'),
   ol: withDirAuto('ol'),
-  li: withDirAuto('li'),
+  li: MarkdownLi,
   blockquote: withDirAuto('blockquote'),
   table: withDirAuto('table'),
   thead: withDirAuto('thead'),
