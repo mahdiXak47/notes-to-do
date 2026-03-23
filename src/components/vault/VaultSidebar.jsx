@@ -687,6 +687,7 @@ export function VaultSidebar({
         x={ctxMenu?.x ?? 0}
         y={ctxMenu?.y ?? 0}
         variant={ctxMenu?.kind === 'folder' ? 'folder' : 'file'}
+        isPinned={Boolean(ctxMenu?.node?.id && pinnedIds[ctxMenu.node.id])}
         disabled={vaultLoading}
         onClose={() => setCtxMenu(null)}
         onAction={(actionId) => {

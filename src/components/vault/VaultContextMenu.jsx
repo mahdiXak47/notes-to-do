@@ -1,34 +1,49 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import './VaultContextMenu.css'
 
-const FOLDER_GROUPS = [
-  [
-    { id: 'newNote', label: 'New note' },
-    { id: 'newFolder', label: 'New folder' },
-  ],
-  [
-    { id: 'duplicate', label: 'Duplicate' },
-    { id: 'move', label: 'Move folder to…' },
-  ],
-  [
-    { id: 'rename', label: 'Rename…' },
-    { id: 'delete', label: 'Delete', danger: true },
-  ],
-]
+function menuGroups(variant, isPinned) {
+  const pinRow = [{ id: 'pin', label: isPinned ? 'Unpin' : 'Pin' }]
+  if (variant === 'folder') {
+    return [
+      pinRow,
+      [
+        { id: 'newNote', label: 'New note' },
+        { id: 'newFolder', label: 'New folder' },
+      ],
+      [
+        { id: 'duplicate', label: 'Duplicate' },
+        { id: 'move', label: 'Move folder to…' },
+      ],
+      [
+        { id: 'rename', label: 'Rename…' },
+        { id: 'delete', label: 'Delete', danger: true },
+      ],
+    ]
+  }
+  return [
+    pinRow,
+    [
+      { id: 'duplicate', label: 'Duplicate' },
+      { id: 'move', label: 'Move file to…' },
+      { id: 'download', label: 'Download' },
+    ],
+    [
+      { id: 'rename', label: 'Rename…' },
+      { id: 'delete', label: 'Delete', danger: true },
+    ],
+  ]
+}
 
-const FILE_GROUPS = [
-  [
-    { id: 'duplicate', label: 'Duplicate' },
-    { id: 'move', label: 'Move file to…' },
-    { id: 'download', label: 'Download' },
-  ],
-  [
-    { id: 'rename', label: 'Rename…' },
-    { id: 'delete', label: 'Delete', danger: true },
-  ],
-]
-
-export function VaultContextMenu({ open, x, y, variant, disabled, onClose, onAction }) {
+export function VaultContextMenu({
+  open,
+  x,
+  y,
+  variant,
+  isPinned,
+  disabled,
+  onClose,
+  onAction,
+}) {
   const menuRef = useRef(null)
 
   useEffect(() => {
@@ -57,9 +72,12 @@ export function VaultContextMenu({ open, x, y, variant, disabled, onClose, onAct
     el.style.top = `${top}px`
   }, [open, x, y])
 
-  if (!open) return null
+  const groups = useMemo(
+    () => menuGroups(variant, Boolean(isPinned)),
+    [variant, isPinned],
+  )
 
-  const groups = variant === 'folder' ? FOLDER_GROUPS : FILE_GROUPS
+  if (!open) return null
 
   return (
     <>
