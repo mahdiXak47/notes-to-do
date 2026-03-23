@@ -134,6 +134,22 @@
   align-items: center;
   gap: 0.5rem;
   justify-self: start;
+  min-width: 0;
+}
+
+.sub-bar-lint-btn {
+  line-height: 1.2;
+  padding: 0.2rem 0.55rem;
+}
+
+.sub-bar-inline-status {
+  min-width: 0;
+  font-size: 0.8125rem;
+  color: var(--obs-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: min(24rem, 32vw);
 }
 
 .sub-bar-title-wrap {

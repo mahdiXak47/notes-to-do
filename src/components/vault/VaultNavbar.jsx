@@ -23,6 +23,9 @@ export const VaultNavbar = forwardRef(function VaultNavbar(
   pendingNoteTitleEditRef,
   onRenameActiveNote,
   onRenameNoteError,
+  onLintActiveNote,
+  lintBusy,
+  lintMessage,
   },
   ref,
 ) {
@@ -184,6 +187,24 @@ export const VaultNavbar = forwardRef(function VaultNavbar(
           >
             <i className="bi bi-arrow-right" aria-hidden />
           </button>
+          {openTabs.length > 0 ? (
+            <>
+              <button
+                type="button"
+                className="btn btn-outline-secondary btn-sm sub-bar-lint-btn"
+                title="Run markdownlint and apply automatic fixes"
+                disabled={lintBusy || !activeFile || !onLintActiveNote}
+                onClick={() => void onLintActiveNote?.()}
+              >
+                {lintBusy ? 'Linting...' : 'Lint'}
+              </button>
+              {lintMessage ? (
+                <span className="sub-bar-inline-status" role="status">
+                  {lintMessage}
+                </span>
+              ) : null}
+            </>
+          ) : null}
         </div>
         <div className="sub-bar-title-wrap" aria-live="polite">
           {activeFile ? (

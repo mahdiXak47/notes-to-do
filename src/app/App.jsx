@@ -51,6 +51,7 @@ import {
 import { useFolderRename } from '../hooks/useFolderRename.js'
 import { useNoteAutosave } from '../hooks/useNoteAutosave.js'
 import { useVaultKeyboardShortcuts } from '../hooks/useVaultKeyboardShortcuts.js'
+import { lintAndFixMarkdown } from '../lib/markdownLintFix.js'
 
 const SKIP_DELETE_CONFIRM_KEY = 'notes_skip_delete_confirm'
 
@@ -73,6 +74,9 @@ function App({ onLogout = () => {}, username = '' }) {
   vaultRef.current = state.vault
   const [settingsModalOpen, setSettingsModalOpen] = useState(false)
   const [moveModal, setMoveModal] = useState(null)
+  const [lintBusy, setLintBusy] = useState(false)
+  const [lintMessage, setLintMessage] = useState('')
+  const lintMessageClearRef = useRef(null)
   const modLabel = useMemo(() => modKeyLabel(), [])
 
   const syncVaultFromServer = useCallback(async () => {
@@ -457,6 +461,69 @@ function App({ onLogout = () => {}, username = '' }) {
     setVaultError(message)
   }, [])
 
+  const showLintMessage = useCallback((message) => {
+    if (lintMessageClearRef.current != null) {
+      window.clearTimeout(lintMessageClearRef.current)
+    }
+    setLintMessage(message)
+    lintMessageClearRef.current = window.setTimeout(() => {
+      setLintMessage('')
+      lintMessageClearRef.current = null
+    }, 6000)
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      if (lintMessageClearRef.current != null) {
+        window.clearTimeout(lintMessageClearRef.current)
+      }
+    }
+  }, [])
+
+  useEffect(() => {
+    if (state.openTabs.length > 0) return
+    setLintMessage('')
+    setLintBusy(false)
+    if (lintMessageClearRef.current != null) {
+      window.clearTimeout(lintMessageClearRef.current)
+      lintMessageClearRef.current = null
+    }
+  }, [state.openTabs.length])
+
+  const onLintActiveNote = useCallback(async () => {
+    if (!activeFile || lintBusy) return
+    setLintBusy(true)
+    setLintMessage('')
+    try {
+      const { text, initialIssueCount, remainingIssueCount } =
+        await lintAndFixMarkdown(activeFile.content)
+      if (text !== activeFile.content) {
+        dispatch({
+          type: 'SET_CONTENT',
+          fileId: activeFile.id,
+          content: text,
+        })
+      }
+      if (initialIssueCount === 0) {
+        showLintMessage('No markdownlint issues found.')
+      } else if (remainingIssueCount === 0) {
+        showLintMessage(
+          `Applied auto-fixes for ${initialIssueCount} issue(s). All clear.`,
+        )
+      } else {
+        showLintMessage(
+          `Applied fixes where possible. ${remainingIssueCount} issue(s) still need manual edits.`,
+        )
+      }
+    } catch (e) {
+      showLintMessage(
+        e instanceof Error ? e.message : 'Markdown lint failed.',
+      )
+    } finally {
+      setLintBusy(false)
+    }
+  }, [activeFile, lintBusy, dispatch, showLintMessage])
+
   return (
     <div className="app-obsidian">
       <div className="app-body">
@@ -506,6 +573,9 @@ function App({ onLogout = () => {}, username = '' }) {
             pendingNoteTitleEditRef={pendingNoteTitleEditRef}
             onRenameActiveNote={renameActiveNote}
             onRenameNoteError={onRenameNoteError}
+            onLintActiveNote={onLintActiveNote}
+            lintBusy={lintBusy}
+            lintMessage={lintMessage}
           />
 
           {activeFile ? (
