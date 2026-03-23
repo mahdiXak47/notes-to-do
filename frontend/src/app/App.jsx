@@ -374,6 +374,9 @@ function App({ onLogout = () => {}, username = '' }) {
               else requestNoteTitleEdit(node.id, node.name)
               break
             }
+            case 'pin':
+              dispatch({ type: 'TOGGLE_PIN', id: node.id })
+              break
             case 'delete':
               handleDeleteRequest({
                 kind: kind === 'folder' ? 'folder' : 'file',
