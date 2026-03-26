@@ -20,6 +20,7 @@ function menuGroups(variant, isPinned) {
       [
         { id: 'duplicate', label: 'Duplicate' },
         { id: 'move', label: 'Move folder to…' },
+        { id: 'download', label: 'Download as .zip' },
       ],
       [
         { id: 'rename', label: 'Rename…' },

@@ -24,6 +24,8 @@ import {
   createNote,
   deleteFolder,
   deleteNote,
+  downloadFolderAsZip,
+  folderHasFiles,
   duplicateFolderRoot,
   duplicateNoteAsCopy,
   downloadNoteAsMarkdownFile,
@@ -138,22 +140,18 @@ function App({ onLogout = () => {}, username = '' }) {
   }, [])
 
   const reloadUploadedAssets = useCallback(async () => {
-    console.log('[upload] reloadUploadedAssets — fetching /api/vault/uploads-list/')
     try {
       const res = await authorizedFetch('/api/vault/uploads-list/', {
         method: 'GET',
       })
-      console.log('[upload] reloadUploadedAssets — status:', res.status)
       const data = await res.json().catch(() => ({}))
       const items = Array.isArray(data)
         ? data
         : Array.isArray(data?.items)
           ? data.items
           : []
-      console.log('[upload] reloadUploadedAssets — items count:', items.length, '| ids:', items.map(i => i.id))
       setUploadedAssets(items)
     } catch (e) {
-      console.error('[upload] reloadUploadedAssets — error:', e)
       setVaultError(e instanceof Error ? e.message : 'Failed to load uploads.')
     }
   }, [setUploadedAssets, setVaultError])
@@ -178,9 +176,7 @@ function App({ onLogout = () => {}, username = '' }) {
       setVaultLoading(true)
       setVaultError(null)
       try {
-        console.log('[startup] loading vault tree + pins in parallel')
         const [raw, pinnedIds] = await Promise.all([fetchVaultTree(), fetchPins()])
-        console.log('[startup] vault tree nodes:', raw?.length, '| pinnedIds:', JSON.stringify(pinnedIds))
         if (cancelled) return
         const expanded = collectExpandedByFolderId(vaultRef.current)
         dispatch({
@@ -188,9 +184,7 @@ function App({ onLogout = () => {}, username = '' }) {
           vault: normalizeTreeFromApi(raw, expanded),
         })
         dispatch({ type: 'SET_PINNED_IDS', pinnedIds })
-        console.log('[startup] SET_VAULT and SET_PINNED_IDS dispatched')
       } catch (e) {
-        console.error('[startup] error loading vault/pins:', e)
         if (!cancelled) {
           setVaultError(
             e instanceof Error ? e.message : 'Failed to load vault.',
@@ -396,81 +390,51 @@ function App({ onLogout = () => {}, username = '' }) {
 
   const handleVaultFileUpload = useCallback(
     async (fileList) => {
-      console.log('[upload] handleVaultFileUpload — received fileList, count:', fileList?.length ?? 0)
-      if (vaultLoading || uploadBusy) {
-        console.warn('[upload] handleVaultFileUpload — blocked: vaultLoading=%s uploadBusy=%s', vaultLoading, uploadBusy)
-        return
-      }
+      if (vaultLoading || uploadBusy) return
       const files = Array.from(fileList ?? [])
-      if (files.length === 0) {
-        console.warn('[upload] handleVaultFileUpload — no files after Array.from, aborting')
-        return
-      }
+      if (files.length === 0) return
       const rejected = []
       const newIds = []
       setUploadBusy(true)
       setVaultError(null)
       try {
         for (const file of files) {
-          console.log('[upload] processing file:', file.name, 'size:', file.size, 'type:', file.type)
           const spec = classifyVaultUploadFile(file)
           if (!spec) {
-            console.warn('[upload] file rejected by classifyVaultUploadFile:', file.name)
             rejected.push({ name: file.name, msg: 'Unsupported file type. Allowed: .md, .png, .jpg, .jpeg, .svg.' })
             continue
           }
           if (spec.kind === 'markdown') {
-            console.log('[upload] markdown path — reading content and creating note for:', file.name)
             const body = await readVaultUploadBody(file, spec.kind)
-            const created = await createNote(
-              null,
-              spec.stem,
-              vaultRef.current,
-            )
-            console.log('[upload] markdown note created, id:', created.id, '— patching body')
+            const created = await createNote(null, spec.stem, vaultRef.current)
             await patchNoteBody(created.id, body)
-            console.log('[upload] body patched — syncing vault')
             await syncVaultFromServer()
             const id = `n-${created.id}`
             newIds.push(id)
-            console.log('[upload] markdown upload done, clientId:', id)
             addToast(`"${file.name}" imported as a new note.`, 'success')
             continue
           }
 
-          console.log('[upload] image/binary path — sending FormData to /api/vault/uploads/ for:', file.name)
           const fd = new FormData()
           fd.append('files', file)
           const res = await authorizedFetch('/api/vault/uploads/', {
             method: 'POST',
             body: fd,
           })
-          console.log('[upload] POST /api/vault/uploads/ response status:', res.status)
           const data = await res.json().catch(() => ({}))
-          console.log('[upload] response body:', JSON.stringify(data))
           if (!res.ok) {
-            const msg =
-              data?.detail ||
-              data?.message ||
-              data?.error ||
-              'Upload failed.'
-            console.error('[upload] upload failed for', file.name, '—', msg)
-            rejected.push({ name: file.name, msg })
+            rejected.push({ name: file.name, msg: data?.detail || data?.message || data?.error || 'Upload failed.' })
             continue
           }
 
           const items = Array.isArray(data?.items) ? data.items : []
           const lastItem = items[items.length - 1]
-          console.log('[upload] items in response:', items.length, '| lastItem:', JSON.stringify(lastItem))
           if (!lastItem?.id) {
-            console.error('[upload] no item id in response for', file.name)
             rejected.push({ name: file.name, msg: 'Upload returned no items.' })
             continue
           }
-          console.log('[upload] reloading uploaded assets list')
           await reloadUploadedAssets()
           setActiveUploadAssetId(lastItem.id)
-          console.log('[upload] image upload done, stored id:', lastItem.id)
           addToast(`"${file.name}" uploaded successfully.`, 'success')
         }
         if (newIds.length > 0) {
@@ -485,11 +449,9 @@ function App({ onLogout = () => {}, username = '' }) {
           }
         }
       } catch (e) {
-        console.error('[upload] unexpected error:', e)
         addToast(e instanceof Error ? e.message : 'Upload failed.', 'error')
       } finally {
         setUploadBusy(false)
-        console.log('[upload] handleVaultFileUpload — done')
       }
     },
     [
@@ -647,8 +609,16 @@ function App({ onLogout = () => {}, username = '' }) {
               setMoveModal({ kind, node })
               break
             case 'download': {
-              if (kind !== 'file') return
-              downloadNoteAsMarkdownFile(node.name, node.content)
+              if (kind === 'file') {
+                downloadNoteAsMarkdownFile(node.name, node.content)
+              } else if (kind === 'folder') {
+                const fullNode = findFolderNode(vaultRef.current, node.id) ?? node
+                if (!folderHasFiles(fullNode)) {
+                  addToast(`"${node.name}" has no notes inside — move notes into it first, then download.`, 'error')
+                  break
+                }
+                await downloadFolderAsZip(fullNode)
+              }
               break
             }
             case 'rename': {
@@ -658,7 +628,6 @@ function App({ onLogout = () => {}, username = '' }) {
             }
             case 'pin': {
               const isPinned = Boolean(pinnedIdsRef.current[node.id])
-              console.log('[pin] toggle — node.id:', node.id, 'kind:', kind, 'currently pinned:', isPinned)
               // Optimistic local update
               dispatch({ type: 'TOGGLE_PIN', id: node.id })
               // Sync to backend
@@ -666,19 +635,9 @@ function App({ onLogout = () => {}, username = '' }) {
                 ? folderPkFromClientId(node.id)
                 : notePkFromClientId(node.id)
               const itemType = kind === 'folder' ? 'folder' : 'note'
-              console.log('[pin] resolved pk:', pk, 'itemType:', itemType)
               if (pk != null) {
-                if (isPinned) {
-                  console.log('[pin] calling removePin...')
-                  await removePin(itemType, pk)
-                  console.log('[pin] removePin done')
-                } else {
-                  console.log('[pin] calling addPin...')
-                  await addPin(itemType, pk)
-                  console.log('[pin] addPin done')
-                }
-              } else {
-                console.warn('[pin] pk is null — skipping API call for node.id:', node.id)
+                if (isPinned) await removePin(itemType, pk)
+                else await addPin(itemType, pk)
               }
               break
             }

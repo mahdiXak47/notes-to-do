@@ -56,22 +56,14 @@ export function collectExpandedByFolderId(nodes, acc = {}) {
 
 /** Fetch all pins and return them as a pinnedIds map: { 'f-5': true, 'n-3': true } */
 export async function fetchPins() {
-  console.log('[pins] fetchPins — calling GET /api/vault/pins/')
   const res = await authorizedFetch('/api/vault/pins/', { method: 'GET' })
-  console.log('[pins] fetchPins — status:', res.status)
-  if (!res.ok) {
-    const body = await res.text().catch(() => '')
-    console.error('[pins] fetchPins — error response:', body)
-    throw new Error(`Failed to load pins (${res.status}).`)
-  }
+  if (!res.ok) throw new Error(`Failed to load pins (${res.status}).`)
   const data = await res.json()
-  console.log('[pins] fetchPins — raw data:', JSON.stringify(data))
   const pinnedIds = {}
   for (const { item_type, item_id } of data) {
     const clientId = item_type === 'folder' ? `f-${item_id}` : `n-${item_id}`
     pinnedIds[clientId] = true
   }
-  console.log('[pins] fetchPins — resolved pinnedIds:', JSON.stringify(pinnedIds))
   return pinnedIds
 }
 
@@ -309,6 +301,41 @@ export async function duplicateFolderRoot(folderNode, getRootNodes, onAfterStep)
     getRootNodes,
     onAfterStep,
   )
+}
+
+export function folderHasFiles(folderNode) {
+  for (const child of folderNode.children || []) {
+    if (child.type === 'file') return true
+    if (child.type === 'folder' && folderHasFiles(child)) return true
+  }
+  return false
+}
+
+function safeName(name) {
+  return String(name || 'untitled').replace(/[/\\?%*:|"<>]/g, '-')
+}
+
+function addFolderToZip(zip, folderNode, path) {
+  for (const child of folderNode.children || []) {
+    if (child.type === 'folder') {
+      addFolderToZip(zip, child, `${path}${safeName(child.name)}/`)
+    } else {
+      zip.file(`${path}${safeName(child.name)}.md`, child.content ?? '')
+    }
+  }
+}
+
+export async function downloadFolderAsZip(folderNode) {
+  const { default: JSZip } = await import('jszip')
+  const zip = new JSZip()
+  const rootName = safeName(folderNode.name)
+  addFolderToZip(zip, folderNode, `${rootName}/`)
+  const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' })
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(blob)
+  a.download = `${rootName}.zip`
+  a.click()
+  URL.revokeObjectURL(a.href)
 }
 
 export function downloadNoteAsMarkdownFile(name, content) {
