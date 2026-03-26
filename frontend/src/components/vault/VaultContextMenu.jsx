@@ -2,6 +2,13 @@ import { useEffect, useMemo, useRef } from 'react'
 import './VaultContextMenu.css'
 
 function menuGroups(variant, isPinned) {
+  if (variant === 'upload') {
+    return [
+      [{ id: 'copyLink', label: 'Copy link' }],
+      [{ id: 'rename', label: 'Rename…' }],
+      [{ id: 'delete', label: 'Delete', danger: true }],
+    ]
+  }
   const pinRow = [{ id: 'pin', label: isPinned ? 'Unpin' : 'Pin' }]
   if (variant === 'folder') {
     return [
@@ -94,7 +101,7 @@ export function VaultContextMenu({
         ref={menuRef}
         className="vault-ctx-menu"
         role="menu"
-        aria-label={variant === 'folder' ? 'Folder actions' : 'File actions'}
+        aria-label={variant === 'folder' ? 'Folder actions' : variant === 'upload' ? 'Uploaded file actions' : 'File actions'}
         style={{ left: x, top: y }}
       >
         {groups.map((items, gi) => (

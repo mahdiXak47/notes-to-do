@@ -646,11 +646,15 @@ export function VaultSidebar({
   onLogout,
   setSettingsModalOpen,
   onVaultContextAction,
+  onUploadContextAction,
 }) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(readSidebarCollapsed)
   const [footerMenuOpen, setFooterMenuOpen] = useState(false)
   const [aboutModalOpen, setAboutModalOpen] = useState(false)
   const [ctxMenu, setCtxMenu] = useState(null)
+  const [uploadRename, setUploadRename] = useState(null) // { id, draft }
+  const uploadRenameInputRef = useRef(null)
+  const uploadRenameLastIdRef = useRef(null)
   const sidebarFooterRef = useRef(null)
   const collapsedAccountMenuRef = useRef(null)
   const vaultUploadInputRef = useRef(null)
@@ -658,6 +662,37 @@ export function VaultSidebar({
   const openFileContextMenu = useCallback((e, node) => {
     setCtxMenu({ x: e.clientX, y: e.clientY, kind: 'file', node })
   }, [])
+
+  const openUploadContextMenu = useCallback((e, asset) => {
+    e.preventDefault()
+    setCtxMenu({ x: e.clientX, y: e.clientY, kind: 'upload', node: asset })
+  }, [])
+
+  const commitUploadRename = useCallback(() => {
+    if (!uploadRename) return
+    const { id, draft } = uploadRename
+    setUploadRename(null)
+    if (draft.trim()) onUploadContextAction?.('rename', id, draft.trim())
+  }, [uploadRename, onUploadContextAction])
+
+  const cancelUploadRename = useCallback(() => setUploadRename(null), [])
+
+  useEffect(() => {
+    if (!uploadRename) {
+      uploadRenameLastIdRef.current = null
+      return
+    }
+    // Only run the initial selection when a NEW rename session starts, not on every draft keystroke.
+    if (uploadRename.id === uploadRenameLastIdRef.current) return
+    uploadRenameLastIdRef.current = uploadRename.id
+    const input = uploadRenameInputRef.current
+    if (!input) return
+    // Select only the stem — everything before the last dot.
+    const name = uploadRename.draft
+    const dot = name.lastIndexOf('.')
+    const stemEnd = dot > 0 ? dot : name.length
+    input.setSelectionRange(0, stemEnd)
+  }, [uploadRename])
 
   const openFolderContextMenu = useCallback((e, node) => {
     setCtxMenu({ x: e.clientX, y: e.clientY, kind: 'folder', node })
@@ -700,7 +735,7 @@ export function VaultSidebar({
         open={Boolean(ctxMenu)}
         x={ctxMenu?.x ?? 0}
         y={ctxMenu?.y ?? 0}
-        variant={ctxMenu?.kind === 'folder' ? 'folder' : 'file'}
+        variant={ctxMenu?.kind === 'folder' ? 'folder' : ctxMenu?.kind === 'upload' ? 'upload' : 'file'}
         isPinned={Boolean(ctxMenu?.node?.id && pinnedIds[ctxMenu.node.id])}
         disabled={vaultLoading}
         onClose={() => setCtxMenu(null)}
@@ -708,7 +743,15 @@ export function VaultSidebar({
           if (!ctxMenu) return
           const { kind, node } = ctxMenu
           setCtxMenu(null)
-          onVaultContextAction(actionId, kind, node)
+          if (kind === 'upload') {
+            if (actionId === 'rename') {
+              setUploadRename({ id: node.id, draft: node.original_name || node.id })
+            } else {
+              onUploadContextAction?.(actionId, node.id, node)
+            }
+          } else {
+            onVaultContextAction(actionId, kind, node)
+          }
         }}
       />
       <aside
@@ -940,6 +983,7 @@ export function VaultSidebar({
                           const isImage =
                             typeof a.mime_type === 'string' &&
                             a.mime_type.startsWith('image/')
+                          const isRenaming = uploadRename?.id === a.id
                           return (
                             <div
                               key={a.id}
@@ -947,34 +991,55 @@ export function VaultSidebar({
                             >
                               <div
                                 className={`tree-row-wrap ${isActive ? 'is-active' : ''}`}
+                                onContextMenu={(e) => openUploadContextMenu(e, a)}
                               >
-                                <button
-                                  type="button"
-                                  className="tree-row tree-row-main"
-                                  draggable={false}
-                                  title="Click to open uploaded file"
-                                  onClick={() => onOpenUploadedAsset?.(a)}
-                                >
-                                  <span
-                                    className="tree-chevron spacer"
-                                    aria-hidden
-                                  >
-                                    <i className="bi bi-chevron-right" />
-                                  </span>
-                                  <TreePathLabel
-                                    segments={null}
-                                    fallbackName={a.original_name || a.id}
-                                  />
-                                  <span className="tree-meta" aria-hidden>
-                                    <i
-                                      className={`bi ${
-                                        isImage
-                                          ? 'bi-image'
-                                          : 'bi-file-earmark-text'
-                                      }`}
+                                {isRenaming ? (
+                                  <div className="tree-row tree-row-main" style={{ paddingRight: '0.4rem' }}>
+                                    <span className="tree-chevron spacer" aria-hidden>
+                                      <i className="bi bi-chevron-right" />
+                                    </span>
+                                    <input
+                                      ref={uploadRenameInputRef}
+                                      className="tree-folder-rename-input"
+                                      value={uploadRename.draft}
+                                      onChange={(e) => setUploadRename((r) => ({ ...r, draft: e.target.value }))}
+                                      onKeyDown={(e) => {
+                                        if (e.key === 'Enter') commitUploadRename()
+                                        if (e.key === 'Escape') cancelUploadRename()
+                                      }}
+                                      onBlur={commitUploadRename}
                                     />
-                                  </span>
-                                </button>
+                                  </div>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    className="tree-row tree-row-main"
+                                    draggable={false}
+                                    title="Click to open uploaded file"
+                                    onClick={() => onOpenUploadedAsset?.(a)}
+                                    onContextMenu={(e) => openUploadContextMenu(e, a)}
+                                  >
+                                    <span
+                                      className="tree-chevron spacer"
+                                      aria-hidden
+                                    >
+                                      <i className="bi bi-chevron-right" />
+                                    </span>
+                                    <TreePathLabel
+                                      segments={null}
+                                      fallbackName={a.original_name || a.id}
+                                    />
+                                    <span className="tree-meta" aria-hidden>
+                                      <i
+                                        className={`bi ${
+                                          isImage
+                                            ? 'bi-image'
+                                            : 'bi-file-earmark-text'
+                                        }`}
+                                      />
+                                    </span>
+                                  </button>
+                                )}
                               </div>
                             </div>
                           )
