@@ -18,6 +18,7 @@ import { SettingsModal } from '../components/modals/SettingsModal.jsx'
 import { VaultNavbar } from '../components/vault/VaultNavbar.jsx'
 import { VaultSidebar } from '../components/vault/VaultSidebar.jsx'
 import {
+  addPin,
   collectExpandedByFolderId,
   createFolder,
   createNote,
@@ -26,6 +27,7 @@ import {
   duplicateFolderRoot,
   duplicateNoteAsCopy,
   downloadNoteAsMarkdownFile,
+  fetchPins,
   fetchVaultTree,
   folderPkFromClientId,
   moveFolderToParent,
@@ -34,6 +36,7 @@ import {
   notePkFromClientId,
   patchNoteBody,
   patchNoteName,
+  removePin,
 } from '../lib/vaultApi.js'
 import { initialVaultState, vaultReducer } from '../lib/vaultReducer.js'
 import {
@@ -92,6 +95,8 @@ function App({ onLogout = () => {}, username = '' }) {
   const pendingNoteTitleEditRef = useRef(null)
   const vaultRef = useRef([])
   vaultRef.current = state.vault
+  const pinnedIdsRef = useRef(state.pinnedIds)
+  pinnedIdsRef.current = state.pinnedIds
   const [settingsModalOpen, setSettingsModalOpen] = useState(false)
   const [moveModal, setMoveModal] = useState(null)
   const [lintBusy, setLintBusy] = useState(false)
@@ -173,14 +178,19 @@ function App({ onLogout = () => {}, username = '' }) {
       setVaultLoading(true)
       setVaultError(null)
       try {
-        const raw = await fetchVaultTree()
+        console.log('[startup] loading vault tree + pins in parallel')
+        const [raw, pinnedIds] = await Promise.all([fetchVaultTree(), fetchPins()])
+        console.log('[startup] vault tree nodes:', raw?.length, '| pinnedIds:', JSON.stringify(pinnedIds))
         if (cancelled) return
         const expanded = collectExpandedByFolderId(vaultRef.current)
         dispatch({
           type: 'SET_VAULT',
           vault: normalizeTreeFromApi(raw, expanded),
         })
+        dispatch({ type: 'SET_PINNED_IDS', pinnedIds })
+        console.log('[startup] SET_VAULT and SET_PINNED_IDS dispatched')
       } catch (e) {
+        console.error('[startup] error loading vault/pins:', e)
         if (!cancelled) {
           setVaultError(
             e instanceof Error ? e.message : 'Failed to load vault.',
@@ -646,9 +656,32 @@ function App({ onLogout = () => {}, username = '' }) {
               else requestNoteTitleEdit(node.id, node.name)
               break
             }
-            case 'pin':
+            case 'pin': {
+              const isPinned = Boolean(pinnedIdsRef.current[node.id])
+              console.log('[pin] toggle — node.id:', node.id, 'kind:', kind, 'currently pinned:', isPinned)
+              // Optimistic local update
               dispatch({ type: 'TOGGLE_PIN', id: node.id })
+              // Sync to backend
+              const pk = kind === 'folder'
+                ? folderPkFromClientId(node.id)
+                : notePkFromClientId(node.id)
+              const itemType = kind === 'folder' ? 'folder' : 'note'
+              console.log('[pin] resolved pk:', pk, 'itemType:', itemType)
+              if (pk != null) {
+                if (isPinned) {
+                  console.log('[pin] calling removePin...')
+                  await removePin(itemType, pk)
+                  console.log('[pin] removePin done')
+                } else {
+                  console.log('[pin] calling addPin...')
+                  await addPin(itemType, pk)
+                  console.log('[pin] addPin done')
+                }
+              } else {
+                console.warn('[pin] pk is null — skipping API call for node.id:', node.id)
+              }
               break
+            }
             case 'delete':
               handleDeleteRequest({
                 kind: kind === 'folder' ? 'folder' : 'file',
