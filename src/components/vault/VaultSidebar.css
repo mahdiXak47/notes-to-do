@@ -169,7 +169,7 @@
 .tree-folder-children {
   position: relative;
   margin: 0;
-  padding: 0;
+  padding: 0 0 0rem 0;
 }
 
 .tree-folder-children::before {

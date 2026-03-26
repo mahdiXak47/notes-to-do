@@ -55,7 +55,7 @@ import { useFolderRename } from '../hooks/useFolderRename.js'
 import { useNoteAutosave } from '../hooks/useNoteAutosave.js'
 import { useVaultKeyboardShortcuts } from '../hooks/useVaultKeyboardShortcuts.js'
 import { lintAndFixMarkdown } from '../lib/markdownLintFix.js'
-import { authorizedFetch } from '../lib/auth.js'
+import { apiUrl, authorizedFetch, getAccessToken } from '../lib/auth.js'
 import {
   classifyVaultUploadFile,
   readVaultUploadBody,
@@ -255,16 +255,22 @@ function App({ onLogout = () => {}, username = '' }) {
   const runDelete = useCallback(
     async (target) => {
       setVaultError(null)
-      if (target.kind === 'folder') {
+      if (target.kind === 'upload') {
+        const res = await authorizedFetch(`/api/vault/uploads/${target.id}/`, { method: 'DELETE' })
+        if (!res.ok) throw new Error(`Failed to delete uploaded file (${res.status}).`)
+        await reloadUploadedAssets()
+        if (activeUploadAssetId === target.id) setActiveUploadAssetId(null)
+      } else if (target.kind === 'folder') {
         const pk = folderPkFromClientId(target.id)
         if (pk != null) await deleteFolder(pk)
+        await syncVaultFromServer()
       } else {
         const pk = notePkFromClientId(target.id)
         if (pk != null) await deleteNote(pk)
+        await syncVaultFromServer()
       }
-      await syncVaultFromServer()
     },
-    [syncVaultFromServer],
+    [syncVaultFromServer, reloadUploadedAssets, activeUploadAssetId],
   )
 
   async function confirmDelete() {
@@ -300,6 +306,56 @@ function App({ onLogout = () => {}, username = '' }) {
       openDeleteModal(target)
     },
     [runDelete, openDeleteModal],
+  )
+
+  const onUploadContextAction = useCallback(
+    async (action, storedName, thirdArg) => {
+      // action='delete': thirdArg is the full asset object
+      // action='copyLink': thirdArg is the full asset object
+      // action='rename': storedName is the current stored id, thirdArg is the new display name string
+      if (action === 'delete') {
+        const asset = thirdArg
+        handleDeleteRequest({
+          kind: 'upload',
+          id: storedName,
+          name: asset?.original_name || storedName,
+        })
+        return
+      }
+      if (action === 'copyLink') {
+        const asset = thirdArg
+        const token = getAccessToken()
+        const url = apiUrl(`/api/vault/uploads/${storedName}/`) + (token ? `?access_token=${token}` : '')
+        const displayName = asset?.original_name || storedName
+        const isImage = typeof asset?.mime_type === 'string' && asset.mime_type.startsWith('image/')
+        const mdLink = isImage ? `![${displayName}](${url})` : `[${displayName}](${url})`
+        try {
+          await navigator.clipboard.writeText(mdLink)
+          addToast('Link copied to clipboard.', 'success')
+        } catch {
+          addToast('Could not copy to clipboard.', 'error')
+        }
+        return
+      }
+      if (action === 'rename') {
+        const newDisplayName = thirdArg
+        try {
+          const res = await authorizedFetch(`/api/vault/uploads/${storedName}/`, {
+            method: 'PATCH',
+            body: JSON.stringify({ name: newDisplayName }),
+          })
+          if (!res.ok) {
+            const data = await res.json().catch(() => ({}))
+            throw new Error(data.detail || `Rename failed (${res.status}).`)
+          }
+          await reloadUploadedAssets()
+          addToast('File renamed.', 'success')
+        } catch (e) {
+          addToast(e instanceof Error ? e.message : 'Rename failed.', 'error')
+        }
+      }
+    },
+    [handleDeleteRequest, reloadUploadedAssets, addToast],
   )
 
   const handleNewNote = useCallback(async () => {
@@ -872,6 +928,7 @@ function App({ onLogout = () => {}, username = '' }) {
           onLogout={onLogout}
           setSettingsModalOpen={setSettingsModalOpen}
           onVaultContextAction={onVaultContextAction}
+          onUploadContextAction={onUploadContextAction}
         />
 
         <section className="editor-pane" aria-label="Editor">
