@@ -151,3 +151,61 @@ class Note(models.Model):
                 path.unlink()
             except OSError:
                 pass
+
+
+class UploadedFile(models.Model):
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='vault_uploaded_files',
+    )
+    stored_name = models.CharField(max_length=300, unique=True)
+    original_name = models.CharField(max_length=255)
+    mime_type = models.CharField(max_length=100, blank=True)
+    size = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return self.original_name
+
+    def disk_path(self) -> Path:
+        from vault.storage import uploaded_files_root
+        return uploaded_files_root(self.user.username) / self.stored_name
+
+    def delete(self, *args, **kwargs):
+        path = self.disk_path()
+        super().delete(*args, **kwargs)
+        if path.is_file():
+            try:
+                path.unlink()
+            except OSError:
+                pass
+
+
+class Pin(models.Model):
+    FOLDER = 'folder'
+    NOTE = 'note'
+    ITEM_TYPE_CHOICES = [(FOLDER, 'Folder'), (NOTE, 'Note')]
+
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='vault_pins',
+    )
+    item_type = models.CharField(max_length=10, choices=ITEM_TYPE_CHOICES)
+    item_id = models.PositiveIntegerField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['user', 'item_type', 'item_id'],
+                name='vault_pin_unique_per_user',
+            ),
+        ]
+
+    def __str__(self):
+        return f'{self.user_id}:{self.item_type}:{self.item_id}'

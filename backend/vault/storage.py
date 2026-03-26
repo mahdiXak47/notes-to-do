@@ -16,3 +16,7 @@ def vault_root() -> Path:
     from django.conf import settings
 
     return Path(settings.VAULT_ROOT)
+
+
+def uploaded_files_root(username: str) -> Path:
+    return vault_root() / sanitize_segment(username) / 'uploads'
