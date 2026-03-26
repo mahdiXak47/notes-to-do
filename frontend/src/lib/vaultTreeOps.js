@@ -1,5 +1,6 @@
 import {
   findBreadcrumb,
+  findFile,
   findFolderBreadcrumb,
   pathJoined,
 } from './vaultTreePaths.js'
@@ -85,6 +86,37 @@ export function stripPinnedFilesFromNodes(nodes, pinnedIds) {
         children: stripPinnedFilesFromNodes(n.children, pinnedIds),
       })
     }
+  }
+  return out
+}
+
+export function stripUploadedFilesFromNodes(nodes, uploadedFileIds) {
+  if (!uploadedFileIds?.length) return nodes
+  const set = new Set(uploadedFileIds)
+  const out = []
+  for (const n of nodes) {
+    if (n.type === 'file') {
+      if (!set.has(n.id)) out.push(n)
+    } else {
+      out.push({
+        ...n,
+        children: stripUploadedFilesFromNodes(n.children, uploadedFileIds),
+      })
+    }
+  }
+  return out
+}
+
+/**
+ * @param {unknown[]} vault
+ * @param {string[]} uploadedFileIds Newest-first ids from upload registry.
+ * @returns {unknown[]}
+ */
+export function collectUploadedFileNodes(vault, uploadedFileIds) {
+  const out = []
+  for (const id of uploadedFileIds) {
+    const f = findFile(vault, id)
+    if (f?.type === 'file') out.push(f)
   }
   return out
 }

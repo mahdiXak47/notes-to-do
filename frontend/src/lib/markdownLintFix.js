@@ -136,6 +136,10 @@ function shouldAutoWrapMd013Line(lines, idx) {
   if (isReferenceDefinitionLine(line)) return false
   if (looksLikeTableRow(line)) return false
   if (inCodeFenceAt(lines, idx)) return false
+  // Avoid breaking markdown image/link URLs by wrapping them.
+  const trimmed = line.trim()
+  if (/^!\[[^\]]*]\([^)]+\)\s*$/.test(trimmed)) return false
+  if (/^\[[^\]]+]\([^)]+\)\s*$/.test(trimmed)) return false
   return true
 }
 

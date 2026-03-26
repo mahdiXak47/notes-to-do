@@ -7,10 +7,12 @@ import {
   useState,
 } from 'react'
 import './App.css'
+import { ToastStack } from '../components/AppToast.jsx'
 import { DeleteConfirmModal } from '../components/modals/DeleteConfirmModal.jsx'
 import { MoveTargetModal } from '../components/modals/MoveTargetModal.jsx'
 import { EditorEmptyState } from '../components/editor/EditorEmptyState.jsx'
 import { MarkdownEditor } from '../components/editor/MarkdownEditor.jsx'
+import { UploadedAssetViewer } from '../components/editor/UploadedAssetViewer.jsx'
 import { QuickOpenDialog } from '../components/modals/QuickOpenDialog.jsx'
 import { SettingsModal } from '../components/modals/SettingsModal.jsx'
 import { VaultNavbar } from '../components/vault/VaultNavbar.jsx'
@@ -30,6 +32,7 @@ import {
   moveNoteToFolder,
   normalizeTreeFromApi,
   notePkFromClientId,
+  patchNoteBody,
   patchNoteName,
 } from '../lib/vaultApi.js'
 import { initialVaultState, vaultReducer } from '../lib/vaultReducer.js'
@@ -52,6 +55,11 @@ import { useFolderRename } from '../hooks/useFolderRename.js'
 import { useNoteAutosave } from '../hooks/useNoteAutosave.js'
 import { useVaultKeyboardShortcuts } from '../hooks/useVaultKeyboardShortcuts.js'
 import { lintAndFixMarkdown } from '../lib/markdownLintFix.js'
+import { authorizedFetch } from '../lib/auth.js'
+import {
+  classifyVaultUploadFile,
+  readVaultUploadBody,
+} from '../lib/vaultUpload.js'
 
 const SKIP_DELETE_CONFIRM_KEY = 'notes_skip_delete_confirm'
 const LINE_NUMBERS_STORAGE_KEY = 'notes_editor_line_numbers'
@@ -75,6 +83,8 @@ function App({ onLogout = () => {}, username = '' }) {
   const [deleteModal, setDeleteModal] = useState(null)
   const [deleteModalDontAskAgain, setDeleteModalDontAskAgain] = useState(false)
   const [pinnedSectionOpen, setPinnedSectionOpen] = useState(true)
+  const [uploadedSectionOpen, setUploadedSectionOpen] = useState(true)
+  const [uploadBusy, setUploadBusy] = useState(false)
   const [vaultLoading, setVaultLoading] = useState(true)
   const [vaultError, setVaultError] = useState(null)
   const [quickOpenOpen, setQuickOpenOpen] = useState(false)
@@ -86,6 +96,9 @@ function App({ onLogout = () => {}, username = '' }) {
   const [moveModal, setMoveModal] = useState(null)
   const [lintBusy, setLintBusy] = useState(false)
   const [lintMessage, setLintMessage] = useState('')
+  const [uploadedAssets, setUploadedAssets] = useState([])
+  const [activeUploadAssetId, setActiveUploadAssetId] = useState(null)
+  const [toasts, setToasts] = useState([])
   const lintProgressFillRef = useRef(null)
   const lintToastRafRef = useRef(null)
   const lintToastDeadlineRef = useRef(null)
@@ -119,6 +132,41 @@ function App({ onLogout = () => {}, username = '' }) {
     })
   }, [])
 
+  const reloadUploadedAssets = useCallback(async () => {
+    console.log('[upload] reloadUploadedAssets — fetching /api/vault/uploads-list/')
+    try {
+      const res = await authorizedFetch('/api/vault/uploads-list/', {
+        method: 'GET',
+      })
+      console.log('[upload] reloadUploadedAssets — status:', res.status)
+      const data = await res.json().catch(() => ({}))
+      const items = Array.isArray(data)
+        ? data
+        : Array.isArray(data?.items)
+          ? data.items
+          : []
+      console.log('[upload] reloadUploadedAssets — items count:', items.length, '| ids:', items.map(i => i.id))
+      setUploadedAssets(items)
+    } catch (e) {
+      console.error('[upload] reloadUploadedAssets — error:', e)
+      setVaultError(e instanceof Error ? e.message : 'Failed to load uploads.')
+    }
+  }, [setUploadedAssets, setVaultError])
+
+  const addToast = useCallback((message, variant = 'success') => {
+    const id = `${Date.now()}-${Math.random()}`
+    setToasts((prev) => [...prev, { id, message, variant }])
+  }, [])
+
+  const removeToast = useCallback((id) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id))
+  }, [])
+
+  useEffect(() => {
+    if (!username) return
+    void reloadUploadedAssets()
+  }, [username, reloadUploadedAssets])
+
   useEffect(() => {
     let cancelled = false
     ;(async () => {
@@ -150,6 +198,19 @@ function App({ onLogout = () => {}, username = '' }) {
   const activeFile = state.activeFileId
     ? findFile(state.vault, state.activeFileId)
     : null
+
+  const activeUploadAsset = useMemo(() => {
+    if (!activeUploadAssetId) return null
+    return uploadedAssets.find((a) => a.id === activeUploadAssetId) ?? null
+  }, [uploadedAssets, activeUploadAssetId])
+
+  const dispatchWithUploadClear = useCallback(
+    (action) => {
+      if (action?.type === 'OPEN_FILE') setActiveUploadAssetId(null)
+      dispatch(action)
+    },
+    [dispatch],
+  )
 
   useNoteAutosave({
     activeFileId: state.activeFileId,
@@ -191,17 +252,20 @@ function App({ onLogout = () => {}, username = '' }) {
     setSettingsModalOpen(false)
   }, [])
 
-  async function runDelete(target) {
-    setVaultError(null)
-    if (target.kind === 'folder') {
-      const pk = folderPkFromClientId(target.id)
-      if (pk != null) await deleteFolder(pk)
-    } else {
-      const pk = notePkFromClientId(target.id)
-      if (pk != null) await deleteNote(pk)
-    }
-    await syncVaultFromServer()
-  }
+  const runDelete = useCallback(
+    async (target) => {
+      setVaultError(null)
+      if (target.kind === 'folder') {
+        const pk = folderPkFromClientId(target.id)
+        if (pk != null) await deleteFolder(pk)
+      } else {
+        const pk = notePkFromClientId(target.id)
+        if (pk != null) await deleteNote(pk)
+      }
+      await syncVaultFromServer()
+    },
+    [syncVaultFromServer],
+  )
 
   async function confirmDelete() {
     if (!deleteModal) return
@@ -221,30 +285,36 @@ function App({ onLogout = () => {}, username = '' }) {
     }
   }
 
-  function handleDeleteRequest(target) {
-    try {
-      if (localStorage.getItem(SKIP_DELETE_CONFIRM_KEY) === '1') {
-        void runDelete(target).catch((e) => {
-          setVaultError(e instanceof Error ? e.message : 'Delete failed.')
-        })
-        return
+  const handleDeleteRequest = useCallback(
+    (target) => {
+      try {
+        if (localStorage.getItem(SKIP_DELETE_CONFIRM_KEY) === '1') {
+          void runDelete(target).catch((e) => {
+            setVaultError(e instanceof Error ? e.message : 'Delete failed.')
+          })
+          return
+        }
+      } catch {
+        /* fall through to modal. */
       }
-    } catch {
-      /* fall through to modal. */
-    }
-    openDeleteModal(target)
-  }
+      openDeleteModal(target)
+    },
+    [runDelete, openDeleteModal],
+  )
 
   const handleNewNote = useCallback(async () => {
     try {
       setVaultError(null)
       const created = await createNote(null, 'Untitled', vaultRef.current)
       await syncVaultFromServer()
-      dispatch({ type: 'OPEN_FILE', id: `n-${created.id}` })
+      dispatchWithUploadClear({
+        type: 'OPEN_FILE',
+        id: `n-${created.id}`,
+      })
     } catch (e) {
       setVaultError(e instanceof Error ? e.message : 'Could not create note.')
     }
-  }, [syncVaultFromServer])
+  }, [syncVaultFromServer, dispatchWithUploadClear])
 
   async function handleNewFolder() {
     try {
@@ -258,6 +328,114 @@ function App({ onLogout = () => {}, username = '' }) {
     }
   }
 
+  const handleVaultFileUpload = useCallback(
+    async (fileList) => {
+      console.log('[upload] handleVaultFileUpload — received fileList, count:', fileList?.length ?? 0)
+      if (vaultLoading || uploadBusy) {
+        console.warn('[upload] handleVaultFileUpload — blocked: vaultLoading=%s uploadBusy=%s', vaultLoading, uploadBusy)
+        return
+      }
+      const files = Array.from(fileList ?? [])
+      if (files.length === 0) {
+        console.warn('[upload] handleVaultFileUpload — no files after Array.from, aborting')
+        return
+      }
+      const rejected = []
+      const newIds = []
+      setUploadBusy(true)
+      setVaultError(null)
+      try {
+        for (const file of files) {
+          console.log('[upload] processing file:', file.name, 'size:', file.size, 'type:', file.type)
+          const spec = classifyVaultUploadFile(file)
+          if (!spec) {
+            console.warn('[upload] file rejected by classifyVaultUploadFile:', file.name)
+            rejected.push({ name: file.name, msg: 'Unsupported file type. Allowed: .md, .png, .jpg, .jpeg, .svg.' })
+            continue
+          }
+          if (spec.kind === 'markdown') {
+            console.log('[upload] markdown path — reading content and creating note for:', file.name)
+            const body = await readVaultUploadBody(file, spec.kind)
+            const created = await createNote(
+              null,
+              spec.stem,
+              vaultRef.current,
+            )
+            console.log('[upload] markdown note created, id:', created.id, '— patching body')
+            await patchNoteBody(created.id, body)
+            console.log('[upload] body patched — syncing vault')
+            await syncVaultFromServer()
+            const id = `n-${created.id}`
+            newIds.push(id)
+            console.log('[upload] markdown upload done, clientId:', id)
+            addToast(`"${file.name}" imported as a new note.`, 'success')
+            continue
+          }
+
+          console.log('[upload] image/binary path — sending FormData to /api/vault/uploads/ for:', file.name)
+          const fd = new FormData()
+          fd.append('files', file)
+          const res = await authorizedFetch('/api/vault/uploads/', {
+            method: 'POST',
+            body: fd,
+          })
+          console.log('[upload] POST /api/vault/uploads/ response status:', res.status)
+          const data = await res.json().catch(() => ({}))
+          console.log('[upload] response body:', JSON.stringify(data))
+          if (!res.ok) {
+            const msg =
+              data?.detail ||
+              data?.message ||
+              data?.error ||
+              'Upload failed.'
+            console.error('[upload] upload failed for', file.name, '—', msg)
+            rejected.push({ name: file.name, msg })
+            continue
+          }
+
+          const items = Array.isArray(data?.items) ? data.items : []
+          const lastItem = items[items.length - 1]
+          console.log('[upload] items in response:', items.length, '| lastItem:', JSON.stringify(lastItem))
+          if (!lastItem?.id) {
+            console.error('[upload] no item id in response for', file.name)
+            rejected.push({ name: file.name, msg: 'Upload returned no items.' })
+            continue
+          }
+          console.log('[upload] reloading uploaded assets list')
+          await reloadUploadedAssets()
+          setActiveUploadAssetId(lastItem.id)
+          console.log('[upload] image upload done, stored id:', lastItem.id)
+          addToast(`"${file.name}" uploaded successfully.`, 'success')
+        }
+        if (newIds.length > 0) {
+          dispatchWithUploadClear({
+            type: 'OPEN_FILE',
+            id: newIds[newIds.length - 1],
+          })
+        }
+        if (rejected.length > 0) {
+          for (const { name, msg } of rejected) {
+            addToast(`"${name}": ${msg}`, 'error')
+          }
+        }
+      } catch (e) {
+        console.error('[upload] unexpected error:', e)
+        addToast(e instanceof Error ? e.message : 'Upload failed.', 'error')
+      } finally {
+        setUploadBusy(false)
+        console.log('[upload] handleVaultFileUpload — done')
+      }
+    },
+    [
+      vaultLoading,
+      uploadBusy,
+      syncVaultFromServer,
+      reloadUploadedAssets,
+      dispatchWithUploadClear,
+      addToast,
+    ],
+  )
+
   const requestNoteTitleEdit = useCallback(
     (fileId, name) => {
       if (vaultLoading) return
@@ -266,9 +444,9 @@ function App({ onLogout = () => {}, username = '' }) {
         return
       }
       pendingNoteTitleEditRef.current = { fileId, name }
-      dispatch({ type: 'OPEN_FILE', id: fileId })
+      dispatchWithUploadClear({ type: 'OPEN_FILE', id: fileId })
     },
-    [vaultLoading, state.activeFileId, dispatch],
+    [vaultLoading, state.activeFileId, dispatchWithUploadClear],
   )
 
   const displayTree = useMemo(() => {
@@ -372,7 +550,10 @@ function App({ onLogout = () => {}, username = '' }) {
                 vaultRef.current,
               )
               await syncVaultFromServer()
-              dispatch({ type: 'OPEN_FILE', id: `n-${created.id}` })
+              dispatchWithUploadClear({
+                type: 'OPEN_FILE',
+                id: `n-${created.id}`,
+              })
               break
             }
             case 'newFolder': {
@@ -438,6 +619,7 @@ function App({ onLogout = () => {}, username = '' }) {
       vaultLoading,
       syncVaultFromServer,
       dispatch,
+      dispatchWithUploadClear,
       onStartFolderRename,
       requestNoteTitleEdit,
       handleDeleteRequest,
@@ -445,8 +627,8 @@ function App({ onLogout = () => {}, username = '' }) {
   )
 
   const openVaultFile = useCallback((id) => {
-    dispatch({ type: 'OPEN_FILE', id })
-  }, [dispatch])
+    dispatchWithUploadClear({ type: 'OPEN_FILE', id })
+  }, [dispatchWithUploadClear])
 
   const closeQuickOpen = useCallback(() => {
     setQuickOpenOpen(false)
@@ -660,12 +842,19 @@ function App({ onLogout = () => {}, username = '' }) {
           sortAZ={state.sortAZ}
           pinnedIds={state.pinnedIds}
           activeFileId={state.activeFileId}
-          dispatch={dispatch}
+          dispatch={dispatchWithUploadClear}
           pinnedFolderNodes={pinnedFolderNodes}
           pinnedFileNodes={pinnedFileNodes}
           mainTreeNodes={mainTreeNodes}
           pinnedSectionOpen={pinnedSectionOpen}
           setPinnedSectionOpen={setPinnedSectionOpen}
+          uploadedAssets={uploadedAssets}
+          uploadedSectionOpen={uploadedSectionOpen}
+          setUploadedSectionOpen={setUploadedSectionOpen}
+          onUploadVaultFiles={handleVaultFileUpload}
+          uploadBusy={uploadBusy}
+          activeUploadedAssetId={activeUploadAssetId}
+          onOpenUploadedAsset={(a) => setActiveUploadAssetId(a?.id ?? null)}
           onNewNote={handleNewNote}
           onNewFolder={handleNewFolder}
           onRequestDelete={handleDeleteRequest}
@@ -692,7 +881,7 @@ function App({ onLogout = () => {}, username = '' }) {
             openTabs={state.openTabs}
             activeFileId={state.activeFileId}
             nav={state.nav}
-            dispatch={dispatch}
+            dispatch={dispatchWithUploadClear}
             vaultLoading={vaultLoading}
             onNewNote={handleNewNote}
             pendingNoteTitleEditRef={pendingNoteTitleEditRef}
@@ -707,10 +896,12 @@ function App({ onLogout = () => {}, username = '' }) {
             onToggleEditorLineNumbers={toggleEditorLineNumbers}
           />
 
-          {activeFile ? (
+          {activeUploadAsset ? (
+            <UploadedAssetViewer asset={activeUploadAsset} />
+          ) : activeFile ? (
             <MarkdownEditor
               file={activeFile}
-              dispatch={dispatch}
+              dispatch={dispatchWithUploadClear}
               paneMode={editorPaneMode}
               showLineNumbers={editorLineNumbersVisible}
             />
@@ -755,6 +946,8 @@ function App({ onLogout = () => {}, username = '' }) {
           </div>
         </div>
       ) : null}
+
+      <ToastStack toasts={toasts} onDismiss={removeToast} />
 
       <QuickOpenDialog
         open={quickOpenOpen}

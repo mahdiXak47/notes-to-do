@@ -298,6 +298,9 @@ export function pruneStateForVaultTree(prevState, newVault) {
   }
   const navIds = prevState.nav.ids.filter((id) => ids.has(id))
   let navI = prevState.nav.i
+  const uploadedFileIds = (prevState.uploadedFileIds ?? []).filter((id) =>
+    ids.has(id),
+  )
   if (!navIds.length) {
     return {
       openTabs,
@@ -305,6 +308,7 @@ export function pruneStateForVaultTree(prevState, newVault) {
       pinnedIds: Object.fromEntries(
         Object.entries(prevState.pinnedIds).filter(([k]) => ids.has(k)),
       ),
+      uploadedFileIds,
       nav: { ids: [], i: 0 },
     }
   }
@@ -315,6 +319,7 @@ export function pruneStateForVaultTree(prevState, newVault) {
     pinnedIds: Object.fromEntries(
       Object.entries(prevState.pinnedIds).filter(([k]) => ids.has(k)),
     ),
+    uploadedFileIds,
     nav: { ids: navIds, i: navI },
   }
 }
