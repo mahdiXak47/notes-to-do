@@ -2,14 +2,16 @@ import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import './MarkdownEditor.css'
+import { getAccessToken } from '../../lib/auth.js'
 
 function withDirAuto(Tag) {
+  const Component = Tag
   return function MarkdownDirAuto(props) {
     const { node: _node, children, ...rest } = props
     return (
-      <Tag dir="auto" {...rest}>
+      <Component dir="auto" {...rest}>
         {children}
-      </Tag>
+      </Component>
     )
   }
 }
@@ -40,6 +42,29 @@ function MarkdownLi(props) {
   return <li {...rest} />
 }
 
+function MarkdownImg(props) {
+  const { src, alt, ...rest } = props
+  if (typeof src === 'string') {
+    const needsToken =
+      src.includes('/api/vault/uploads/') &&
+      !src.includes('access_token=')
+    if (needsToken) {
+      const token = getAccessToken()
+      if (token) {
+        const join = src.includes('?') ? '&' : '?'
+        return (
+          <img
+            src={`${src}${join}access_token=${encodeURIComponent(token)}`}
+            alt={alt}
+            {...rest}
+          />
+        )
+      }
+    }
+  }
+  return <img src={src} alt={alt} {...rest} />
+}
+
 const MARKDOWN_BIDI_COMPONENTS = {
   p: withDirAuto('p'),
   h1: withDirAuto('h1'),
@@ -48,6 +73,7 @@ const MARKDOWN_BIDI_COMPONENTS = {
   h4: withDirAuto('h4'),
   h5: withDirAuto('h5'),
   h6: withDirAuto('h6'),
+  img: MarkdownImg,
   ul: withDirAuto('ul'),
   ol: withDirAuto('ol'),
   li: MarkdownLi,

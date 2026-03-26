@@ -105,7 +105,12 @@ export async function authorizedFetch(path, options = {}) {
     ...options.headers,
     ...authHeaders(),
   }
-  if (options.body != null && !headers['Content-Type']) {
+  const isFormData =
+    typeof FormData !== 'undefined' && options.body instanceof FormData
+  const isUrlEncoded =
+    typeof URLSearchParams !== 'undefined' &&
+    options.body instanceof URLSearchParams
+  if (options.body != null && !headers['Content-Type'] && !isFormData && !isUrlEncoded) {
     headers['Content-Type'] = 'application/json'
   }
   const res = await fetch(apiUrl(path), { ...options, headers })
@@ -115,7 +120,12 @@ export async function authorizedFetch(path, options = {}) {
         ...options.headers,
         ...authHeaders(),
       }
-      if (options.body != null && !retryHeaders['Content-Type']) {
+      if (
+        options.body != null &&
+        !retryHeaders['Content-Type'] &&
+        !isFormData &&
+        !isUrlEncoded
+      ) {
         retryHeaders['Content-Type'] = 'application/json'
       }
       return fetch(apiUrl(path), { ...options, headers: retryHeaders })

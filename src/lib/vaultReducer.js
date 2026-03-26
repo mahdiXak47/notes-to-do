@@ -15,6 +15,8 @@ export const initialVaultState = {
   searchQuery: '',
   sortAZ: false,
   pinnedIds: {},
+  /** Newest-first note client ids (`n-…`) shown under Uploaded. */
+  uploadedFileIds: [],
 }
 
 export function vaultReducer(state, action) {
@@ -100,6 +102,26 @@ export function vaultReducer(state, action) {
       if (next[id]) delete next[id]
       else next[id] = true
       return { ...state, pinnedIds: next }
+    }
+    case 'SET_UPLOADED_FILE_IDS': {
+      const ids = Array.isArray(action.ids)
+        ? action.ids.filter((x) => typeof x === 'string')
+        : []
+      const seen = new Set()
+      const deduped = []
+      for (const id of ids) {
+        if (seen.has(id)) continue
+        seen.add(id)
+        deduped.push(id)
+      }
+      return { ...state, uploadedFileIds: deduped }
+    }
+    case 'REGISTER_UPLOADED_FILE': {
+      const { id } = action
+      if (typeof id !== 'string' || state.uploadedFileIds.includes(id)) {
+        return state
+      }
+      return { ...state, uploadedFileIds: [id, ...state.uploadedFileIds] }
     }
     default:
       return state

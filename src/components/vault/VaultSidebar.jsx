@@ -622,6 +622,13 @@ export function VaultSidebar({
   mainTreeNodes,
   pinnedSectionOpen,
   setPinnedSectionOpen,
+  uploadedAssets = [],
+  uploadedSectionOpen,
+  setUploadedSectionOpen,
+  onUploadVaultFiles,
+  uploadBusy = false,
+  activeUploadedAssetId,
+  onOpenUploadedAsset,
   onNewNote,
   onNewFolder,
   onRequestDelete,
@@ -646,6 +653,7 @@ export function VaultSidebar({
   const [ctxMenu, setCtxMenu] = useState(null)
   const sidebarFooterRef = useRef(null)
   const collapsedAccountMenuRef = useRef(null)
+  const vaultUploadInputRef = useRef(null)
 
   const openFileContextMenu = useCallback((e, node) => {
     setCtxMenu({ x: e.clientX, y: e.clientY, kind: 'file', node })
@@ -728,13 +736,34 @@ export function VaultSidebar({
                 >
                   <i className="bi bi-search" aria-hidden />
                 </button>
+                <input
+                  ref={vaultUploadInputRef}
+                  type="file"
+                  className="visually-hidden"
+                  accept=".md,.markdown,.png,.jpg,.jpeg,.svg,image/png,image/jpeg,image/svg+xml,text/markdown"
+                  multiple
+                  tabIndex={-1}
+                  aria-hidden
+                  onChange={(e) => {
+                    const files = Array.from(e.target.files || [])
+                    e.target.value = ''
+                    if (files.length) void onUploadVaultFiles?.(files)
+                  }}
+                />
                 <button
                   type="button"
                   className="btn-icon"
-                  title="Bookmarks"
-                  aria-label="Bookmarks"
+                  title="Upload .md or images (.png, .jpg, .jpeg, .svg)"
+                  aria-label="Upload markdown or images"
+                  disabled={vaultLoading || uploadBusy}
+                  onClick={() => vaultUploadInputRef.current?.click()}
                 >
-                  <i className="bi bi-star" aria-hidden />
+                  <i
+                    className={
+                      uploadBusy ? 'bi bi-hourglass-split' : 'bi bi-upload'
+                    }
+                    aria-hidden
+                  />
                 </button>
               </div>
               <button
@@ -877,6 +906,79 @@ export function VaultSidebar({
                           onOpenFileContextMenu={openFileContextMenu}
                         />
                       ))}
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+              {!vaultLoading && uploadedAssets.length > 0 ? (
+                <div className="sidebar-pinned-block">
+                  <div className="sidebar-pinned-header-row">
+                    <div className="tree-row-wrap sidebar-pinned-folder-wrap">
+                      <button
+                        type="button"
+                        className="tree-row tree-row-main sidebar-pinned-folder"
+                        onClick={() => setUploadedSectionOpen((o) => !o)}
+                        aria-expanded={uploadedSectionOpen}
+                      >
+                        <span className="tree-chevron" aria-hidden>
+                          <i
+                            className={`bi bi-chevron-${uploadedSectionOpen ? 'down' : 'right'}`}
+                          />
+                        </span>
+                        <span className="tree-label text-truncate">
+                          Uploaded files
+                        </span>
+                      </button>
+                    </div>
+                  </div>
+                  {uploadedSectionOpen ? (
+                    <div className="tree-folder-children">
+                      {uploadedAssets.map((a) => {
+                          const isActive = Boolean(
+                            activeUploadedAssetId && a.id === activeUploadedAssetId,
+                          )
+                          const isImage =
+                            typeof a.mime_type === 'string' &&
+                            a.mime_type.startsWith('image/')
+                          return (
+                            <div
+                              key={a.id}
+                              style={{ paddingLeft: 0.65 + 'rem' }}
+                            >
+                              <div
+                                className={`tree-row-wrap ${isActive ? 'is-active' : ''}`}
+                              >
+                                <button
+                                  type="button"
+                                  className="tree-row tree-row-main"
+                                  draggable={false}
+                                  title="Click to open uploaded file"
+                                  onClick={() => onOpenUploadedAsset?.(a)}
+                                >
+                                  <span
+                                    className="tree-chevron spacer"
+                                    aria-hidden
+                                  >
+                                    <i className="bi bi-chevron-right" />
+                                  </span>
+                                  <TreePathLabel
+                                    segments={null}
+                                    fallbackName={a.original_name || a.id}
+                                  />
+                                  <span className="tree-meta" aria-hidden>
+                                    <i
+                                      className={`bi ${
+                                        isImage
+                                          ? 'bi-image'
+                                          : 'bi-file-earmark-text'
+                                      }`}
+                                    />
+                                  </span>
+                                </button>
+                              </div>
+                            </div>
+                          )
+                        })}
                     </div>
                   ) : null}
                 </div>
