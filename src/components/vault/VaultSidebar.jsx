@@ -66,6 +66,7 @@ function PinnedFolderBlock({
   vault,
   pinnedIds,
   dispatch,
+  onTogglePin,
   onRequestDelete,
   focusedFolderId,
   onFolderRowFocus,
@@ -179,7 +180,7 @@ function PinnedFolderBlock({
             draggable={false}
             onClick={(e) => {
               e.stopPropagation()
-              dispatch({ type: 'TOGGLE_PIN', id: node.id })
+              onTogglePin('folder', node)
             }}
           >
             <i
@@ -219,6 +220,7 @@ function PinnedFolderBlock({
             expandedOverrides={expandedOverrides}
             vault={vault}
             pinnedIds={pinnedIds}
+            onTogglePin={onTogglePin}
             onRequestDelete={onRequestDelete}
             focusedFolderId={focusedFolderId}
             onFolderRowFocus={onFolderRowFocus}
@@ -246,6 +248,7 @@ function FileTreeRow({
   pinnedIds,
   activeFileId,
   dispatch,
+  onTogglePin,
   onRequestDelete,
   depth,
   alwaysShowPath,
@@ -298,7 +301,7 @@ function FileTreeRow({
             draggable={false}
             onClick={(e) => {
               e.stopPropagation()
-              dispatch({ type: 'TOGGLE_PIN', id: node.id })
+              onTogglePin('file', node)
             }}
           >
             <i
@@ -338,6 +341,7 @@ function TreeRows({
   expandedOverrides,
   vault,
   pinnedIds,
+  onTogglePin,
   onRequestDelete,
   focusedFolderId,
   onFolderRowFocus,
@@ -460,7 +464,7 @@ function TreeRows({
                 draggable={false}
                 onClick={(e) => {
                   e.stopPropagation()
-                  dispatch({ type: 'TOGGLE_PIN', id: node.id })
+                  onTogglePin('folder', node)
                 }}
               >
                 <i
@@ -500,6 +504,7 @@ function TreeRows({
                 expandedOverrides={expandedOverrides}
                 vault={vault}
                 pinnedIds={pinnedIds}
+                onTogglePin={onTogglePin}
                 onRequestDelete={onRequestDelete}
                 focusedFolderId={focusedFolderId}
                 onFolderRowFocus={onFolderRowFocus}
@@ -528,6 +533,7 @@ function TreeRows({
           pinnedIds={pinnedIds}
           activeFileId={activeFileId}
           dispatch={dispatch}
+          onTogglePin={onTogglePin}
           onRequestDelete={onRequestDelete}
           depth={depth}
           alwaysShowPath={false}
@@ -915,6 +921,7 @@ export function VaultSidebar({
                           vault={vault}
                           pinnedIds={pinnedIds}
                           dispatch={dispatch}
+                          onTogglePin={(kind, n) => onVaultContextAction('pin', kind, n)}
                           onRequestDelete={onRequestDelete}
                           focusedFolderId={focusedFolderId}
                           onFolderRowFocus={onFolderRowFocus}
@@ -941,6 +948,7 @@ export function VaultSidebar({
                           pinnedIds={pinnedIds}
                           activeFileId={activeFileId}
                           dispatch={dispatch}
+                          onTogglePin={(kind, n) => onVaultContextAction('pin', kind, n)}
                           onRequestDelete={onRequestDelete}
                           depth={1}
                           alwaysShowPath
@@ -1057,6 +1065,7 @@ export function VaultSidebar({
                   expandedOverrides={Boolean(searchQuery.trim())}
                   vault={vault}
                   pinnedIds={pinnedIds}
+                  onTogglePin={(kind, n) => onVaultContextAction('pin', kind, n)}
                   onRequestDelete={onRequestDelete}
                   focusedFolderId={focusedFolderId}
                   onFolderRowFocus={onFolderRowFocus}

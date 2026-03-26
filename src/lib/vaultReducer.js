@@ -96,6 +96,8 @@ export function vaultReducer(state, action) {
       return { ...state, sortAZ: !state.sortAZ }
     case 'SET_SEARCH':
       return { ...state, searchQuery: action.value }
+    case 'SET_PINNED_IDS':
+      return { ...state, pinnedIds: action.pinnedIds }
     case 'TOGGLE_PIN': {
       const { id } = action
       const next = { ...state.pinnedIds }

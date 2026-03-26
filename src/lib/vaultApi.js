@@ -54,6 +54,42 @@ export function collectExpandedByFolderId(nodes, acc = {}) {
   return acc
 }
 
+/** Fetch all pins and return them as a pinnedIds map: { 'f-5': true, 'n-3': true } */
+export async function fetchPins() {
+  console.log('[pins] fetchPins — calling GET /api/vault/pins/')
+  const res = await authorizedFetch('/api/vault/pins/', { method: 'GET' })
+  console.log('[pins] fetchPins — status:', res.status)
+  if (!res.ok) {
+    const body = await res.text().catch(() => '')
+    console.error('[pins] fetchPins — error response:', body)
+    throw new Error(`Failed to load pins (${res.status}).`)
+  }
+  const data = await res.json()
+  console.log('[pins] fetchPins — raw data:', JSON.stringify(data))
+  const pinnedIds = {}
+  for (const { item_type, item_id } of data) {
+    const clientId = item_type === 'folder' ? `f-${item_id}` : `n-${item_id}`
+    pinnedIds[clientId] = true
+  }
+  console.log('[pins] fetchPins — resolved pinnedIds:', JSON.stringify(pinnedIds))
+  return pinnedIds
+}
+
+export async function addPin(itemType, itemId) {
+  const res = await authorizedFetch('/api/vault/pins/', {
+    method: 'POST',
+    body: JSON.stringify({ item_type: itemType, item_id: itemId }),
+  })
+  if (!res.ok) throw new Error(`Failed to pin item (${res.status}).`)
+}
+
+export async function removePin(itemType, itemId) {
+  const res = await authorizedFetch(`/api/vault/pins/${itemType}/${itemId}/`, {
+    method: 'DELETE',
+  })
+  if (!res.ok && res.status !== 404) throw new Error(`Failed to unpin item (${res.status}).`)
+}
+
 export async function fetchVaultTree() {
   const res = await authorizedFetch('/api/vault/tree/', { method: 'GET' })
   if (!res.ok) {
