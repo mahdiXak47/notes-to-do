@@ -205,10 +205,12 @@ def vault_uploads(request):
     return Response({'items': items, 'errors': errors})
 
 
-@api_view(['GET'])
+@api_view(['GET', 'PATCH', 'DELETE'])
 @permission_classes([permissions.AllowAny])
-def vault_upload_raw(request, stored_name: str):
-    logger.debug('[upload] vault_upload_raw — stored_name: %s', stored_name)
+def vault_upload_detail(request, stored_name: str):
+    """Serve, rename, or delete a single uploaded file."""
+    # GET is used by <img> tags which cannot send Authorization headers,
+    # so we support an optional access_token query param for all methods.
     token = request.query_params.get('access_token')
     if token and not request.headers.get('Authorization'):
         request.META['HTTP_AUTHORIZATION'] = f'Bearer {token}'
@@ -216,20 +218,52 @@ def vault_upload_raw(request, stored_name: str):
     auth = JWTAuthentication()
     try:
         user, _auth_token = auth.authenticate(request)
-        logger.debug('[upload] vault_upload_raw — authenticated as: %s', user.username)
+        logger.debug('[upload] vault_upload_detail — user: %s | method: %s | name: %s', user.username, request.method, stored_name)
     except Exception as e:  # noqa: BLE001
-        logger.warning('[upload] vault_upload_raw — auth failed: %s', e)
+        logger.warning('[upload] vault_upload_detail — auth failed: %s', e)
         raise AuthenticationFailed(str(e) or 'Authentication failed.') from e
 
     storage = UploadedFilesStorage(user.username)
     safe = storage.get_valid_name(stored_name)
-    logger.debug('[upload] vault_upload_raw — sanitized: %s | exists: %s', safe, storage.exists(safe))
     if not storage.exists(safe):
         raise Http404('File not found.')
 
-    filename = _uploaded_original_name(safe)
-    mime_type = _guess_mime_type(filename, None)
-    f = storage.open(safe, 'rb')
-    resp = FileResponse(f, content_type=mime_type)
-    resp['Content-Disposition'] = f'inline; filename="{filename}"'
-    return resp
+    if request.method == 'GET':
+        filename = _uploaded_original_name(safe)
+        mime_type = _guess_mime_type(filename, None)
+        f = storage.open(safe, 'rb')
+        resp = FileResponse(f, content_type=mime_type)
+        resp['Content-Disposition'] = f'inline; filename="{filename}"'
+        return resp
+
+    if request.method == 'DELETE':
+        storage.delete(safe)
+        logger.debug('[upload] vault_upload_detail — deleted: %s', safe)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    # PATCH — rename (changes the display stem, keeps the UUID prefix and extension)
+    new_display_name = (request.data.get('name') or '').strip()
+    if not new_display_name:
+        return Response({'detail': 'name is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    old_p = Path(storage.location) / safe
+    old_ext = old_p.suffix.lower()
+    if not _is_allowed_upload_name(f'x{old_ext}'):
+        return Response({'detail': 'Invalid file extension.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    uuid_prefix = safe.split('__')[0] if '__' in safe else uuid.uuid4().hex
+    new_stem = sanitize_segment(Path(new_display_name).stem or new_display_name)
+    new_stored_name = f'{uuid_prefix}__{new_stem}{old_ext}'
+    new_p = Path(storage.location) / new_stored_name
+
+    if new_p.exists() and new_p != old_p:
+        return Response({'detail': 'A file with that name already exists.'}, status=status.HTTP_409_CONFLICT)
+
+    old_p.rename(new_p)
+    logger.debug('[upload] vault_upload_detail — renamed: %s → %s', safe, new_stored_name)
+    mime_type = _guess_mime_type(new_display_name, None)
+    return Response({
+        'id': new_stored_name,
+        'original_name': new_display_name,
+        'mime_type': mime_type,
+    })
