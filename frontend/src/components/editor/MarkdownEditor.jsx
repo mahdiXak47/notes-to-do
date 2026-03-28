@@ -128,6 +128,17 @@ function applyTabToMarkdown(value, selStart, selEnd, shiftKey) {
   const s = Math.min(selStart, selEnd)
   const e = Math.max(selStart, selEnd)
   if (s === e) {
+    if (shiftKey) {
+      // Dedent current line
+      const lineStart = value.lastIndexOf('\n', s - 1) + 1
+      const line = value.slice(lineStart, value.indexOf('\n', lineStart) === -1 ? value.length : value.indexOf('\n', lineStart))
+      let removed = 0
+      if (line.startsWith(TAB_CHAR)) removed = 1
+      else if (line.startsWith('  ')) removed = 2
+      if (removed === 0) return { next: value, caretStart: s, caretEnd: s }
+      const next = value.slice(0, lineStart) + line.slice(removed) + value.slice(lineStart + line.length)
+      return { next, caretStart: Math.max(lineStart, s - removed), caretEnd: Math.max(lineStart, s - removed) }
+    }
     const next = value.slice(0, s) + TAB_CHAR + value.slice(e)
     return { next, caretStart: s + 1, caretEnd: s + 1 }
   }
