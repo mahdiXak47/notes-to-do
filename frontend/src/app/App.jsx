@@ -48,7 +48,6 @@ import {
   filterTree,
   findFolderNode,
   sortTree,
-  stripPinnedFilesFromNodes,
 } from '../lib/vaultTreeOps.js'
 import {
   findFile,
@@ -492,10 +491,7 @@ function App({ onLogout = () => {}, username = '' }) {
     [state.vault, state.pinnedIds],
   )
 
-  const mainTreeNodes = useMemo(
-    () => stripPinnedFilesFromNodes(displayTree, state.pinnedIds),
-    [displayTree, state.pinnedIds],
-  )
+  const mainTreeNodes = displayTree
 
   const moveModalTargets = useMemo(() => {
     if (!moveModal) return []

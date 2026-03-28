@@ -259,9 +259,7 @@ function FileTreeRow({
 }) {
   const pathSegs = findBreadcrumb(vault, node.id)
   const pinned = Boolean(pinnedIds[node.id])
-  const usePath = Boolean(
-    alwaysShowPath || (pinned && pathSegs?.length),
-  )
+  const usePath = Boolean(alwaysShowPath)
   return (
     <div style={{ paddingLeft: depth * 0.65 + 'rem' }}>
       <div
