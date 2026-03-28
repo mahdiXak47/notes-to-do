@@ -164,6 +164,7 @@ function PinnedFolderBlock({
               onStartFolderRename(node.id, node.name)
             }}
           >
+            <i className={`bi ${expanded ? 'bi-folder2-open' : 'bi-folder2'} tree-item-icon`} aria-hidden />
             <PinnedFolderPathLabel
               vault={vault}
               folderId={node.id}
@@ -287,6 +288,7 @@ function FileTreeRow({
           <span className="tree-chevron spacer" aria-hidden>
             <i className="bi bi-chevron-right" />
           </span>
+          <i className="bi bi-file-earmark-text tree-item-icon" aria-hidden />
           <TreePathLabel
             segments={usePath ? pathSegs : null}
             fallbackName={node.name}
@@ -441,6 +443,7 @@ function TreeRows({
                   onStartFolderRename(node.id, node.name)
                 }}
               >
+                <i className={`bi ${expanded ? 'bi-folder2-open' : 'bi-folder2'} tree-item-icon`} aria-hidden />
                 {pinned ? (
                   <PinnedFolderPathLabel
                     vault={vault}
@@ -1033,19 +1036,14 @@ export function VaultSidebar({
                                     >
                                       <i className="bi bi-chevron-right" />
                                     </span>
+                                    <i
+                                      className={`bi ${isImage ? 'bi-image' : 'bi-file-earmark-text'} tree-item-icon`}
+                                      aria-hidden
+                                    />
                                     <TreePathLabel
                                       segments={null}
                                       fallbackName={a.original_name || a.id}
                                     />
-                                    <span className="tree-meta" aria-hidden>
-                                      <i
-                                        className={`bi ${
-                                          isImage
-                                            ? 'bi-image'
-                                            : 'bi-file-earmark-text'
-                                        }`}
-                                      />
-                                    </span>
                                   </button>
                                 )}
                               </div>
