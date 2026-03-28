@@ -30,14 +30,17 @@ export const VaultNavbar = forwardRef(function VaultNavbar(
   onToggleEditorRightPane,
   showEditorLineNumbers = true,
   onToggleEditorLineNumbers,
+  onExportPdf,
   },
   ref,
 ) {
   const [titleEditing, setTitleEditing] = useState(false)
   const [titleDraft, setTitleDraft] = useState('')
+  const [moreOpen, setMoreOpen] = useState(false)
   const titleInputRef = useRef(null)
   const titleBlurIgnoredUntilRef = useRef(0)
   const prevTitleResetFileIdRef = useRef(null)
+  const moreMenuRef = useRef(null)
 
   useImperativeHandle(
     ref,
@@ -93,6 +96,18 @@ export const VaultNavbar = forwardRef(function VaultNavbar(
     return () => window.cancelAnimationFrame(raf)
   }, [titleEditing])
 
+  // Close more menu on outside click
+  useEffect(() => {
+    if (!moreOpen) return undefined
+    const handler = (e) => {
+      if (moreMenuRef.current && !moreMenuRef.current.contains(e.target)) {
+        setMoreOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [moreOpen])
+
   const commitNoteTitleEdit = useCallback(async () => {
     if (!activeFile) {
       setTitleEditing(false)
@@ -123,6 +138,16 @@ export const VaultNavbar = forwardRef(function VaultNavbar(
       setTitleEditing(false)
     }
   }, [activeFile, titleDraft, onRenameActiveNote, onRenameNoteError])
+
+  const hasActiveTab = openTabs.length > 0
+
+  const sourceLabel =
+    editorPaneMode === 'preview-only' ? 'Show source pane' : 'Hide source pane'
+  const previewLabel =
+    editorPaneMode === 'source-only' ? 'Show preview pane' : 'Hide preview pane'
+  const lineNumLabel = showEditorLineNumbers
+    ? 'Hide line numbers'
+    : 'Show line numbers'
 
   return (
     <>
@@ -254,92 +279,99 @@ export const VaultNavbar = forwardRef(function VaultNavbar(
             )}
           </div>
         </div>
-        <div className="sub-bar-center">
-          {openTabs.length > 0 ? (
-            <>
-              <button
-                type="button"
-                className="btn-icon"
-                title={
-                  editorPaneMode === 'split'
-                    ? 'Hide Markdown source'
-                    : editorPaneMode === 'preview-only'
-                      ? 'Show Markdown source'
-                      : 'Show preview only'
-                }
-                aria-label={
-                  editorPaneMode === 'split'
-                    ? 'Hide Markdown source'
-                    : editorPaneMode === 'preview-only'
-                      ? 'Show Markdown source'
-                      : 'Show preview only'
-                }
-                onClick={() => onToggleEditorLeftPane?.()}
-              >
-                <i
-                  className="bi bi-caret-left-square-fill"
-                  aria-hidden
-                />
-              </button>
-              <button
-                type="button"
-                className="btn-icon"
-                title={
-                  editorPaneMode === 'split'
-                    ? 'Hide preview'
-                    : editorPaneMode === 'source-only'
-                      ? 'Show preview'
-                      : 'Show Markdown source only'
-                }
-                aria-label={
-                  editorPaneMode === 'split'
-                    ? 'Hide preview'
-                    : editorPaneMode === 'source-only'
-                      ? 'Show preview'
-                      : 'Show Markdown source only'
-                }
-                onClick={() => onToggleEditorRightPane?.()}
-              >
-                <i
-                  className="bi bi-caret-right-square-fill"
-                  aria-hidden
-                />
-              </button>
-              <button
-                type="button"
-                className="btn-icon"
-                title={
-                  showEditorLineNumbers
-                    ? 'Hide line numbers'
-                    : 'Show line numbers'
-                }
-                aria-label={
-                  showEditorLineNumbers
-                    ? 'Hide line numbers in source editor'
-                    : 'Show line numbers in source editor'
-                }
-                aria-pressed={showEditorLineNumbers}
-                disabled={!onToggleEditorLineNumbers}
-                onClick={() => onToggleEditorLineNumbers?.()}
-              >
-                <i className="bi bi-list-ol" aria-hidden />
-              </button>
-            </>
-          ) : null}
-        </div>
+
+        <div className="sub-bar-center" />
+
         <div className="sub-bar-end">
-          {openTabs.length > 0 ? (
-            <>
+          {hasActiveTab ? (
+            <div className="sub-bar-more-wrap" ref={moreMenuRef}>
               <button
                 type="button"
-                className="btn btn-outline-secondary btn-sm sub-bar-lint-btn"
-                title="Run markdownlint and apply automatic fixes"
-                disabled={lintBusy || !activeFile || !onLintActiveNote}
-                onClick={() => void onLintActiveNote?.()}
+                className={`btn-icon sub-bar-more-btn${moreOpen ? ' is-active' : ''}`}
+                title="More options"
+                aria-label="More options"
+                aria-expanded={moreOpen}
+                onClick={() => setMoreOpen((o) => !o)}
               >
-                {lintBusy ? 'Linting...' : 'Lint'}
+                <i className="bi bi-three-dots" aria-hidden />
               </button>
-            </>
+
+              {moreOpen && (
+                <div className="sub-bar-more-menu" role="menu">
+                  <button
+                    type="button"
+                    className="sub-bar-more-item"
+                    role="menuitem"
+                    disabled={lintBusy || !activeFile || !onLintActiveNote}
+                    onClick={() => {
+                      setMoreOpen(false)
+                      void onLintActiveNote?.()
+                    }}
+                  >
+                    <i className="bi bi-check2-circle" aria-hidden />
+                    {lintBusy ? 'Linting…' : 'Lint'}
+                  </button>
+
+                  <button
+                    type="button"
+                    className="sub-bar-more-item"
+                    role="menuitem"
+                    disabled={!activeFile || !onExportPdf}
+                    onClick={() => {
+                      setMoreOpen(false)
+                      onExportPdf?.()
+                    }}
+                  >
+                    <i className="bi bi-file-earmark-pdf" aria-hidden />
+                    Export as PDF
+                  </button>
+
+                  <div className="sub-bar-more-sep" role="separator" />
+
+                  <button
+                    type="button"
+                    className="sub-bar-more-item"
+                    role="menuitem"
+                    disabled={!onToggleEditorLineNumbers}
+                    onClick={() => {
+                      setMoreOpen(false)
+                      onToggleEditorLineNumbers?.()
+                    }}
+                  >
+                    <i className="bi bi-list-ol" aria-hidden />
+                    {lineNumLabel}
+                  </button>
+
+                  <button
+                    type="button"
+                    className="sub-bar-more-item"
+                    role="menuitem"
+                    disabled={!onToggleEditorLeftPane}
+                    onClick={() => {
+                      setMoreOpen(false)
+                      onToggleEditorLeftPane?.()
+                    }}
+                  >
+                    <i className="bi bi-layout-sidebar-reverse" aria-hidden />
+                    {sourceLabel}
+                  </button>
+
+                  <button
+                    type="button"
+                    className="sub-bar-more-item"
+                    role="menuitem"
+                    disabled={!onToggleEditorRightPane}
+                    onClick={() => {
+                      setMoreOpen(false)
+                      onToggleEditorRightPane?.()
+                    }}
+                  >
+                    <i className="bi bi-layout-sidebar" aria-hidden />
+                    {previewLabel}
+                  </button>
+                </div>
+              )}
+            </div>
           ) : null}
         </div>
       </div>
