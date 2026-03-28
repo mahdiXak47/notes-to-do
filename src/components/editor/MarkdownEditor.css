@@ -249,8 +249,8 @@
   list-style-position: outside;
 }
 
-.md-preview ul[dir='rtl'],
-.md-preview ol[dir='rtl'] {
+.md-preview ul:dir(rtl),
+.md-preview ol:dir(rtl) {
   padding-inline-start: 2rem;
 }
 
@@ -263,7 +263,7 @@
   padding-inline-start: 0.35rem;
 }
 
-.md-preview ul.contains-task-list[dir='rtl'] {
+.md-preview ul.contains-task-list:dir(rtl) {
   padding-inline-start: 0.5rem;
 }
 

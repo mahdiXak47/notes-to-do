@@ -72,7 +72,6 @@ const MARKDOWN_BIDI_COMPONENTS = {
   h6: withDirAuto('h6'),
   ul: withDirAuto('ul'),
   ol: withDirAuto('ol'),
-  li: withDirAuto('li'),
   blockquote: withDirAuto('blockquote'),
   table: withDirAuto('table'),
   thead: withDirAuto('thead'),
