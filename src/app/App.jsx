@@ -875,6 +875,53 @@ function App({ onLogout = () => {}, username = '' }) {
     }
   }, [activeFile, lintBusy, dispatch, showLintMessage])
 
+  const onExportPdf = useCallback(() => {
+    if (!activeFile) return
+    const previewEl = document.querySelector('.md-preview')
+    const bodyHtml = previewEl ? previewEl.innerHTML : ''
+    const title = activeFile.name.replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    const fullHtml = `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>${title}</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  body { font-family: Georgia, 'Times New Roman', serif; max-width: 800px; margin: 0 auto; padding: 2rem 2.5rem; color: #1a3044; line-height: 1.6; font-size: 1rem; }
+  h1, h2, h3, h4, h5, h6 { font-weight: 600; color: #0d1b2a; line-height: 1.25; margin-top: 1.4rem; margin-bottom: 0.5rem; }
+  h1 { font-size: 1.75rem; border-bottom: 1px solid #d0dae8; padding-bottom: 0.35rem; }
+  h2 { font-size: 1.35rem; } h3 { font-size: 1.1rem; }
+  h1:first-child, h2:first-child, h3:first-child { margin-top: 0; }
+  p { margin: 0 0 0.75rem; }
+  ul, ol { margin: 0 0 0.75rem; padding-left: 1.75rem; }
+  li { margin: 0.2rem 0; }
+  blockquote { margin: 0.5rem 0 1rem; padding: 0.25rem 0 0.25rem 1rem; border-left: 3px solid #82c8e5; color: #4a6578; }
+  pre { margin: 0.5rem 0 1rem; padding: 0.75rem 1rem; background: #f0f4fa; border: 1px solid #d8e2ed; border-radius: 6px; overflow-x: auto; font-size: 0.8125rem; font-family: 'Courier New', Courier, monospace; }
+  code { font-family: 'Courier New', Courier, monospace; font-size: 0.88em; background: rgba(0,71,171,0.07); padding: 0.12em 0.35em; border-radius: 4px; }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  table { border-collapse: collapse; width: 100%; margin: 0.5rem 0 1rem; font-size: 0.875rem; }
+  th, td { border: 1px solid #c8d4e0; padding: 0.35rem 0.6rem; }
+  th { background: rgba(0,71,171,0.06); font-weight: 600; }
+  img { max-width: 100%; height: auto; }
+  a { color: #0047ab; }
+  hr { border: none; border-top: 1px solid #d0dae8; margin: 1rem 0; }
+  input[type='checkbox'] { margin-right: 0.45rem; vertical-align: middle; }
+  ul.contains-task-list { list-style: none; padding-left: 0.35rem; }
+  @media print { body { padding: 0; max-width: 100%; } a { color: inherit; text-decoration: none; } }
+</style>
+</head>
+<body>${bodyHtml}<script>window.addEventListener('load',function(){window.print();})<\/script></body>
+</html>`
+    const blob = new Blob([fullHtml], { type: 'text/html;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const win = window.open(url, '_blank')
+    if (win) {
+      win.addEventListener('afterprint', () => URL.revokeObjectURL(url))
+    } else {
+      URL.revokeObjectURL(url)
+    }
+  }, [activeFile])
+
   return (
     <div className="app-obsidian">
       <div className="app-body">
@@ -939,6 +986,7 @@ function App({ onLogout = () => {}, username = '' }) {
             onToggleEditorRightPane={toggleEditorRightPane}
             showEditorLineNumbers={editorLineNumbersVisible}
             onToggleEditorLineNumbers={toggleEditorLineNumbers}
+            onExportPdf={onExportPdf}
           />
 
           {activeUploadAsset ? (
