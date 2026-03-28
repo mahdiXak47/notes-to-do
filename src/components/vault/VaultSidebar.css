@@ -395,6 +395,13 @@
   text-align: left;
 }
 
+.tree-item-icon {
+  flex-shrink: 0;
+  margin-right: 0.3rem;
+  opacity: 0.6;
+  font-size: 0.8em;
+}
+
 .tree-row-main {
   flex: 1;
   min-width: 0;

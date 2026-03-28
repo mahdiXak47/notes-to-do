@@ -37,10 +37,6 @@ function MarkdownCode(props) {
   return <code {...rest}>{children}</code>
 }
 
-function MarkdownLi(props) {
-  const { node: _node, ...rest } = props
-  return <li {...rest} />
-}
 
 function MarkdownImg(props) {
   const { src, alt, ...rest } = props
@@ -66,6 +62,7 @@ function MarkdownImg(props) {
 }
 
 const MARKDOWN_BIDI_COMPONENTS = {
+  // Block elements: dir="auto" lets the browser detect RTL per-block
   p: withDirAuto('p'),
   h1: withDirAuto('h1'),
   h2: withDirAuto('h2'),
@@ -73,10 +70,9 @@ const MARKDOWN_BIDI_COMPONENTS = {
   h4: withDirAuto('h4'),
   h5: withDirAuto('h5'),
   h6: withDirAuto('h6'),
-  img: MarkdownImg,
   ul: withDirAuto('ul'),
   ol: withDirAuto('ol'),
-  li: MarkdownLi,
+  li: withDirAuto('li'),
   blockquote: withDirAuto('blockquote'),
   table: withDirAuto('table'),
   thead: withDirAuto('thead'),
@@ -84,16 +80,13 @@ const MARKDOWN_BIDI_COMPONENTS = {
   tr: withDirAuto('tr'),
   td: withDirAuto('td'),
   th: withDirAuto('th'),
-  strong: withDirAuto('strong'),
-  em: withDirAuto('em'),
-  del: withDirAuto('del'),
-  a: withDirAuto('a'),
   dl: withDirAuto('dl'),
   dt: withDirAuto('dt'),
   dd: withDirAuto('dd'),
   section: withDirAuto('section'),
-  sup: withDirAuto('sup'),
-  sub: withDirAuto('sub'),
+  // Inline elements: NO dir attribute — adding dir="auto" on inline elements
+  // isolates their text from the parent block's direction detection, breaking RTL.
+  img: MarkdownImg,
   pre: MarkdownPre,
   code: MarkdownCode,
 }
@@ -339,6 +332,7 @@ export function MarkdownEditor({
         <textarea
           ref={sourceTextareaRef}
           className="md-editor md-editor--split"
+          dir="auto"
           spellCheck={false}
           value={file.content}
           onChange={(e) =>
