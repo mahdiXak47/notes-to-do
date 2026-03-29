@@ -5,16 +5,22 @@ import {
   pathJoined,
 } from './vaultTreePaths.js'
 
-export function sortTree(nodes, enabled) {
-  if (!enabled) return nodes
+export function sortTree(nodes, order) {
+  if (!order || order === 'none') return nodes
+
+  const compare = order === 'az'
+    ? (a, b) => a.name.localeCompare(b.name)
+    : (a, b) => {
+        const ta = a.created_at ? new Date(a.created_at).getTime() : 0
+        const tb = b.created_at ? new Date(b.created_at).getTime() : 0
+        return tb - ta
+      }
+
   return [...nodes]
-    .sort((a, b) => {
-      if (a.type !== b.type) return a.type === 'folder' ? -1 : 1
-      return a.name.localeCompare(b.name)
-    })
+    .sort(compare)
     .map((n) =>
       n.type === 'folder'
-        ? { ...n, children: sortTree(n.children, true) }
+        ? { ...n, children: sortTree(n.children, order) }
         : n,
     )
 }

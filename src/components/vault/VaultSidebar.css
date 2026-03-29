@@ -289,6 +289,29 @@
   outline-offset: 1px;
 }
 
+.sidebar-toolbar .btn-icon--active {
+  color: var(--obs-text);
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.sort-menu-popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  min-width: 11rem;
+  padding: 0.35rem 0;
+  border-radius: 14px;
+  background-color: #2a3340;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
+  z-index: 60;
+}
+
+.sort-menu-item--active {
+  color: var(--obs-text);
+  font-weight: 500;
+}
+
 .sidebar-footer-popover {
   position: absolute;
   right: 0;

@@ -10,6 +10,62 @@ import {
   splitDirAndFileName,
 } from '../../lib/vaultTreePaths.js'
 
+const SORT_OPTIONS = [
+  { order: 'none', label: 'Default order' },
+  { order: 'az', label: 'Sort A–Z' },
+  { order: 'newest', label: 'Newest first' },
+]
+
+function SortMenu({ sortOrder, dispatch }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+
+  useEffect(() => {
+    if (!open) return
+    function onDown(e) {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false)
+    }
+    document.addEventListener('mousedown', onDown)
+    return () => document.removeEventListener('mousedown', onDown)
+  }, [open])
+
+  const active = sortOrder !== 'none'
+
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <button
+        type="button"
+        className={`btn-icon${active ? ' btn-icon--active' : ''}`}
+        title="Sort order"
+        aria-label="Sort order"
+        onClick={() => setOpen((v) => !v)}
+      >
+        <i className="bi bi-sort-down-alt" aria-hidden />
+      </button>
+      {open && (
+        <div className="sort-menu-popover">
+          {SORT_OPTIONS.map((opt) => (
+            <button
+              key={opt.order}
+              type="button"
+              className={`sidebar-footer-popover-item${sortOrder === opt.order ? ' sort-menu-item--active' : ''}`}
+              onClick={() => {
+                dispatch({ type: 'SET_SORT_ORDER', order: opt.order })
+                setOpen(false)
+              }}
+            >
+              {sortOrder === opt.order && (
+                <i className="bi bi-check2" style={{ marginRight: '0.4rem' }} />
+              )}
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 const SIDEBAR_COLLAPSED_KEY = 'notes_sidebar_collapsed'
 
 function readSidebarCollapsed() {
@@ -620,7 +676,7 @@ export function VaultSidebar({
   vaultLoading,
   vaultError,
   searchQuery,
-  sortAZ,
+  sortOrder,
   pinnedIds,
   activeFileId,
   dispatch,
@@ -847,15 +903,7 @@ export function VaultSidebar({
               >
                 <i className="bi bi-folder-plus" aria-hidden />
               </button>
-              <button
-                type="button"
-                className="btn-icon"
-                title={sortAZ ? 'Unsort' : 'Sort A–Z'}
-                aria-label="Toggle sort order"
-                onClick={() => dispatch({ type: 'TOGGLE_SORT' })}
-              >
-                <i className="bi bi-sort-down-alt" aria-hidden />
-              </button>
+              <SortMenu sortOrder={sortOrder} dispatch={dispatch} />
               <button
                 type="button"
                 className="btn-icon"

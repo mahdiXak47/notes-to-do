@@ -13,7 +13,7 @@ export const initialVaultState = {
   activeFileId: null,
   nav: { ids: [], i: 0 },
   searchQuery: '',
-  sortAZ: false,
+  sortOrder: 'none', // 'none' | 'az' | 'newest'
   pinnedIds: {},
   /** Newest-first note client ids (`n-…`) shown under Uploaded. */
   uploadedFileIds: [],
@@ -92,8 +92,8 @@ export function vaultReducer(state, action) {
       }
     case 'COLLAPSE_ALL':
       return { ...state, vault: collapseAll(state.vault) }
-    case 'TOGGLE_SORT':
-      return { ...state, sortAZ: !state.sortAZ }
+    case 'SET_SORT_ORDER':
+      return { ...state, sortOrder: action.order }
     case 'SET_SEARCH':
       return { ...state, searchQuery: action.value }
     case 'SET_PINNED_IDS':
