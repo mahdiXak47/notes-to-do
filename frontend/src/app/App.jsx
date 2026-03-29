@@ -366,10 +366,9 @@ function App({ onLogout = () => {}, username = '' }) {
       setVaultError(null)
       const created = await createNote(null, 'Untitled', vaultRef.current)
       await syncVaultFromServer()
-      dispatchWithUploadClear({
-        type: 'OPEN_FILE',
-        id: `n-${created.id}`,
-      })
+      const fileId = `n-${created.id}`
+      pendingNoteTitleEditRef.current = { fileId, name: created.name }
+      dispatchWithUploadClear({ type: 'OPEN_FILE', id: fileId })
     } catch (e) {
       setVaultError(e instanceof Error ? e.message : 'Could not create note.')
     }
@@ -378,8 +377,9 @@ function App({ onLogout = () => {}, username = '' }) {
   async function handleNewFolder() {
     try {
       setVaultError(null)
-      await createFolder(null, 'New folder', vaultRef.current)
+      const created = await createFolder(null, 'New folder', vaultRef.current)
       await syncVaultFromServer()
+      onStartFolderRename(`f-${created.id}`, created.name)
     } catch (e) {
       setVaultError(
         e instanceof Error ? e.message : 'Could not create folder.',
@@ -477,9 +477,9 @@ function App({ onLogout = () => {}, username = '' }) {
   )
 
   const displayTree = useMemo(() => {
-    const sorted = sortTree(state.vault, state.sortAZ)
+    const sorted = sortTree(state.vault, state.sortOrder)
     return filterTree(sorted, state.searchQuery)
-  }, [state.vault, state.sortAZ, state.searchQuery])
+  }, [state.vault, state.sortOrder, state.searchQuery])
 
   const pinnedFileNodes = useMemo(
     () => collectPinnedFileNodes(state.vault, state.pinnedIds),
@@ -930,7 +930,7 @@ function App({ onLogout = () => {}, username = '' }) {
           vaultLoading={vaultLoading}
           vaultError={vaultError}
           searchQuery={state.searchQuery}
-          sortAZ={state.sortAZ}
+          sortOrder={state.sortOrder}
           pinnedIds={state.pinnedIds}
           activeFileId={state.activeFileId}
           dispatch={dispatchWithUploadClear}
