@@ -26,6 +26,12 @@ def export_note_bodies_to_files(apps, schema_editor):
                 current = None
         return parts
 
+    # If body column was already removed, there is nothing to export.
+    connection = schema_editor.connection
+    columns = [col.name for col in connection.introspection.get_table_description(connection.cursor(), 'vault_note')]
+    if 'body' not in columns:
+        return
+
     base_root = Path(settings.VAULT_ROOT).resolve()
 
     for note in Note.objects.iterator():
