@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('vault', '0002_pin'),
+        ('vault', '0003_remove_note_body'),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
