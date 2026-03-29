@@ -8,7 +8,6 @@ from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import api_view, authentication_classes, permission_classes
 from rest_framework.response import Response
 from rest_framework_simplejwt.authentication import JWTAuthentication
-from rest_framework.exceptions import AuthenticationFailed
 
 
 class QueryParamJWTAuthentication(JWTAuthentication):
@@ -86,6 +85,7 @@ def vault_tree(request):
             'type': 'folder',
             'name': folder.name,
             'children': ch,
+            'created_at': folder.created_at.isoformat(),
         }
 
     def build_note(note):
@@ -96,6 +96,7 @@ def vault_tree(request):
             'name': note.name,
             'content': note.read_content(),
             'meta': None,
+            'created_at': note.created_at.isoformat(),
         }
 
     root = [build_folder(f) for f in children_folders.get(None, [])] + [
