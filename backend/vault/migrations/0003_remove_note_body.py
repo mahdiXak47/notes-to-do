@@ -48,6 +48,10 @@ def export_note_bodies_to_files(apps, schema_editor):
         path.write_text(text, encoding='utf-8')
 
 
+def drop_body_column(apps, schema_editor):
+    schema_editor.execute('ALTER TABLE vault_note DROP COLUMN IF EXISTS body')
+
+
 def noop_reverse(apps, schema_editor):
     pass
 
@@ -60,8 +64,5 @@ class Migration(migrations.Migration):
 
     operations = [
         migrations.RunPython(export_note_bodies_to_files, noop_reverse),
-        migrations.RemoveField(
-            model_name='note',
-            name='body',
-        ),
+        migrations.RunPython(drop_body_column, noop_reverse),
     ]
