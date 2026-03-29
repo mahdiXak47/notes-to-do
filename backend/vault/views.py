@@ -5,10 +5,24 @@ from pathlib import Path
 
 from django.http import Http404, HttpResponse
 from rest_framework import permissions, status, viewsets
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, authentication_classes, permission_classes
 from rest_framework.response import Response
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework.exceptions import AuthenticationFailed
+
+
+class QueryParamJWTAuthentication(JWTAuthentication):
+    """Accepts JWT from ?access_token= query param (needed for <img> tags)."""
+
+    def authenticate(self, request):
+        result = super().authenticate(request)
+        if result is not None:
+            return result
+        token = request.query_params.get('access_token')
+        if not token:
+            return None
+        validated = self.get_validated_token(token)
+        return self.get_user(validated), validated
 
 from vault.models import Folder, Note, Pin, UploadedFile
 from vault.serializers import FolderSerializer, NoteSerializer
@@ -186,6 +200,7 @@ def vault_uploads_list(request):
 
 
 @api_view(['GET', 'PATCH', 'DELETE'])
+@authentication_classes([QueryParamJWTAuthentication])
 @permission_classes([permissions.IsAuthenticated])
 def vault_upload_detail(request, stored_name: str):
     try:
