@@ -1,42 +1,18 @@
-from collections import defaultdict
-import logging
 import mimetypes
-import os
 import uuid
+from collections import defaultdict
 from pathlib import Path
 
-from django.http import FileResponse, Http404
+from django.http import Http404, HttpResponse
 from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework.exceptions import AuthenticationFailed
 
-from vault.models import Folder, Note
+from vault.models import Folder, Note, Pin, UploadedFile
 from vault.serializers import FolderSerializer, NoteSerializer
-from vault.storage import UploadedFilesStorage, sanitize_segment, uploaded_files_root
-
-logger = logging.getLogger('vault')
-
-_ALLOWED_UPLOAD_EXTS = {'.txt', '.md', '.png', '.jpg', '.jpeg', '.svg'}
-
-
-def _is_allowed_upload_name(name: str) -> bool:
-    ext = Path(name).suffix.lower()
-    return ext in _ALLOWED_UPLOAD_EXTS
-
-
-def _guess_mime_type(filename: str, fallback: str | None) -> str:
-    mime = mimetypes.guess_type(filename)[0]
-    return mime or fallback or 'application/octet-stream'
-
-
-def _uploaded_original_name(stored_name: str) -> str:
-    raw = Path(stored_name).name
-    if '__' not in raw:
-        return raw
-    _uuid, rest = raw.split('__', 1)
-    return rest
+from vault.storage import uploaded_files_root
 
 
 class FolderViewSet(viewsets.ModelViewSet):
@@ -115,155 +91,126 @@ def vault_tree(request):
     return Response(root)
 
 
-@api_view(['GET'])
+@api_view(['GET', 'POST'])
 @permission_classes([permissions.IsAuthenticated])
-def vault_uploads_list(request):
-    username = request.user.username
-    root = uploaded_files_root(username)
-    logger.debug('[upload] vault_uploads_list — user: %s | root: %s | exists: %s', username, root, root.exists())
-    if not root.exists():
-        return Response([])
-    items = []
-    for p in root.iterdir():
-        if not p.is_file():
-            continue
-        name = p.name
-        if not _is_allowed_upload_name(name):
-            continue
-        st = p.stat()
-        mime_type = _guess_mime_type(name, None)
-        items.append({
-            'id': name,
-            'original_name': _uploaded_original_name(name),
-            'mime_type': mime_type,
-            'size': st.st_size,
-            'created_at_ms': int(st.st_mtime * 1000),
-        })
-    items.sort(key=lambda x: x['created_at_ms'], reverse=True)
-    logger.debug('[upload] vault_uploads_list — returning %d items', len(items))
-    return Response(items)
+def vault_pins(request):
+    user = request.user
+    if request.method == 'GET':
+        pins = Pin.objects.filter(user=user).values('item_type', 'item_id')
+        return Response(list(pins))
+
+    # POST — create a pin
+    item_type = (request.data.get('item_type') or '').strip()
+    item_id = request.data.get('item_id')
+
+    if item_type not in (Pin.FOLDER, Pin.NOTE):
+        return Response(
+            {'detail': 'item_type must be "folder" or "note".'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    try:
+        item_id = int(item_id)
+    except (TypeError, ValueError):
+        return Response(
+            {'detail': 'item_id must be an integer.'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    pin, created = Pin.objects.get_or_create(user=user, item_type=item_type, item_id=item_id)
+    return Response(
+        {'item_type': pin.item_type, 'item_id': pin.item_id},
+        status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
+    )
+
+
+@api_view(['DELETE'])
+@permission_classes([permissions.IsAuthenticated])
+def vault_pin_delete(request, item_type: str, item_id: int):
+    deleted, _ = Pin.objects.filter(
+        user=request.user,
+        item_type=item_type,
+        item_id=item_id,
+    ).delete()
+    if not deleted:
+        raise Http404('Pin not found.')
+    return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 @api_view(['POST'])
 @permission_classes([permissions.IsAuthenticated])
 def vault_uploads(request):
-    max_bytes = int(os.environ.get('UPLOAD_MAX_BYTES', str(20 * 1024 * 1024)))
-    username = request.user.username
-    logger.debug('[upload] vault_uploads called — user: %s', username)
-
-    storage = UploadedFilesStorage(username)
-    root = uploaded_files_root(username)
-    logger.debug('[upload] upload root path: %s | exists: %s', root, root.exists())
-    root.mkdir(parents=True, exist_ok=True)
-
-    uploaded_files = request.FILES.getlist('files') or []
-    logger.debug('[upload] FILES keys: %s | "files" field count: %d', list(request.FILES.keys()), len(uploaded_files))
-    if not uploaded_files:
-        single = request.FILES.get('file')
-        if single is not None:
-            uploaded_files = [single]
-            logger.debug('[upload] fell back to single "file" field: %s', single.name)
-
-    if not uploaded_files:
-        logger.warning('[upload] no files found in request for user: %s', username)
-        return Response(
-            {'items': [], 'errors': [{'reason': 'No files provided.'}]},
-            status=status.HTTP_400_BAD_REQUEST,
-        )
-
+    files = request.FILES.getlist('files')
+    if not files:
+        return Response({'detail': 'No files provided.'}, status=status.HTTP_400_BAD_REQUEST)
+    upload_dir = uploaded_files_root(request.user.username)
+    upload_dir.mkdir(parents=True, exist_ok=True)
     items = []
-    errors = []
-    for f in uploaded_files:
-        filename = getattr(f, 'name', '') or ''
-        logger.debug('[upload] processing file: %s | size: %s | content_type: %s', filename, getattr(f, 'size', '?'), getattr(f, 'content_type', '?'))
-        if not filename or not _is_allowed_upload_name(filename):
-            logger.warning('[upload] rejected — unsupported file type: %s', filename)
-            errors.append({'name': filename, 'reason': f'Unsupported file type. Allowed: {sorted(_ALLOWED_UPLOAD_EXTS)}.'})
-            continue
-        if getattr(f, 'size', 0) > max_bytes:
-            logger.warning('[upload] rejected — file too large: %s (%d bytes)', filename, f.size)
-            errors.append({'name': filename, 'reason': f'File too large. Max: {max_bytes} bytes.'})
-            continue
-
-        p = Path(filename)
-        ext = p.suffix.lower()
-        stem = sanitize_segment(p.stem)
-        desired_name = f'{uuid.uuid4().hex}__{stem}{ext}'
-        logger.debug('[upload] saving — desired name: %s', desired_name)
-        stored_name = storage.save(desired_name, f)
-        final_path = root / stored_name
-        logger.debug('[upload] saved as: %s | path exists: %s', stored_name, final_path.exists())
-        mime_type = _guess_mime_type(filename, getattr(f, 'content_type', None))
+    for f in files:
+        ext = Path(f.name).suffix.lower()
+        stored_name = f'{uuid.uuid4().hex}{ext}'
+        dest = upload_dir / stored_name
+        with dest.open('wb') as out:
+            for chunk in f.chunks():
+                out.write(chunk)
+        mime = f.content_type or mimetypes.guess_type(f.name)[0] or 'application/octet-stream'
+        record = UploadedFile.objects.create(
+            user=request.user,
+            stored_name=stored_name,
+            original_name=f.name,
+            mime_type=mime,
+            size=f.size,
+        )
         items.append({
-            'id': stored_name,
-            'original_name': filename,
-            'mime_type': mime_type,
-            'size': getattr(f, 'size', None),
+            'id': record.stored_name,
+            'original_name': record.original_name,
+            'mime_type': record.mime_type,
+            'size': record.size,
         })
+    return Response({'items': items}, status=status.HTTP_201_CREATED)
 
-    logger.debug('[upload] done — saved: %d | errors: %d', len(items), len(errors))
-    return Response({'items': items, 'errors': errors})
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def vault_uploads_list(request):
+    uploads = UploadedFile.objects.filter(user=request.user)
+    items = [
+        {
+            'id': u.stored_name,
+            'original_name': u.original_name,
+            'mime_type': u.mime_type,
+            'size': u.size,
+        }
+        for u in uploads
+    ]
+    return Response(items)
 
 
 @api_view(['GET', 'PATCH', 'DELETE'])
-@permission_classes([permissions.AllowAny])
+@permission_classes([permissions.IsAuthenticated])
 def vault_upload_detail(request, stored_name: str):
-    """Serve, rename, or delete a single uploaded file."""
-    # GET is used by <img> tags which cannot send Authorization headers,
-    # so we support an optional access_token query param for all methods.
-    token = request.query_params.get('access_token')
-    if token and not request.headers.get('Authorization'):
-        request.META['HTTP_AUTHORIZATION'] = f'Bearer {token}'
-
-    auth = JWTAuthentication()
     try:
-        user, _auth_token = auth.authenticate(request)
-        logger.debug('[upload] vault_upload_detail — user: %s | method: %s | name: %s', user.username, request.method, stored_name)
-    except Exception as e:  # noqa: BLE001
-        logger.warning('[upload] vault_upload_detail — auth failed: %s', e)
-        raise AuthenticationFailed(str(e) or 'Authentication failed.') from e
-
-    storage = UploadedFilesStorage(user.username)
-    safe = storage.get_valid_name(stored_name)
-    if not storage.exists(safe):
-        raise Http404('File not found.')
+        record = UploadedFile.objects.get(user=request.user, stored_name=stored_name)
+    except UploadedFile.DoesNotExist:
+        raise Http404('Upload not found.')
 
     if request.method == 'GET':
-        filename = _uploaded_original_name(safe)
-        mime_type = _guess_mime_type(filename, None)
-        f = storage.open(safe, 'rb')
-        resp = FileResponse(f, content_type=mime_type)
-        resp['Content-Disposition'] = f'inline; filename="{filename}"'
-        return resp
+        path = record.disk_path()
+        if not path.is_file():
+            raise Http404('File not found on disk.')
+        with path.open('rb') as fh:
+            content = fh.read()
+        response = HttpResponse(content, content_type=record.mime_type or 'application/octet-stream')
+        response['Content-Disposition'] = f'inline; filename="{record.original_name}"'
+        return response
 
-    if request.method == 'DELETE':
-        storage.delete(safe)
-        logger.debug('[upload] vault_upload_detail — deleted: %s', safe)
-        return Response(status=status.HTTP_204_NO_CONTENT)
+    if request.method == 'PATCH':
+        new_name = (request.data.get('name') or '').strip()
+        if not new_name:
+            return Response({'detail': 'Name is required.'}, status=status.HTTP_400_BAD_REQUEST)
+        record.original_name = new_name
+        record.save(update_fields=['original_name'])
+        return Response({'id': record.stored_name, 'original_name': record.original_name})
 
-    # PATCH — rename (changes the display stem, keeps the UUID prefix and extension)
-    new_display_name = (request.data.get('name') or '').strip()
-    if not new_display_name:
-        return Response({'detail': 'name is required.'}, status=status.HTTP_400_BAD_REQUEST)
-
-    old_p = Path(storage.location) / safe
-    old_ext = old_p.suffix.lower()
-    if not _is_allowed_upload_name(f'x{old_ext}'):
-        return Response({'detail': 'Invalid file extension.'}, status=status.HTTP_400_BAD_REQUEST)
-
-    uuid_prefix = safe.split('__')[0] if '__' in safe else uuid.uuid4().hex
-    new_stem = sanitize_segment(Path(new_display_name).stem or new_display_name)
-    new_stored_name = f'{uuid_prefix}__{new_stem}{old_ext}'
-    new_p = Path(storage.location) / new_stored_name
-
-    if new_p.exists() and new_p != old_p:
-        return Response({'detail': 'A file with that name already exists.'}, status=status.HTTP_409_CONFLICT)
-
-    old_p.rename(new_p)
-    logger.debug('[upload] vault_upload_detail — renamed: %s → %s', safe, new_stored_name)
-    mime_type = _guess_mime_type(new_display_name, None)
-    return Response({
-        'id': new_stored_name,
-        'original_name': new_display_name,
-        'mime_type': mime_type,
-    })
+    # DELETE
+    record.delete()
+    return Response(status=status.HTTP_204_NO_CONTENT)
