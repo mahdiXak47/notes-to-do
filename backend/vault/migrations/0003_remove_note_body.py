@@ -49,7 +49,7 @@ def noop_reverse(apps, schema_editor):
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('vault', '0001_initial'),
+        ('vault', '0002_pin'),
     ]
 
     operations = [
