@@ -825,6 +825,12 @@ export function VaultSidebar({
         {!sidebarCollapsed ? (
           <>
             <div className="sidebar-toolbar sidebar-toolbar--top">
+              <img
+                src="/icons/notes-todo-logo.svg"
+                alt="Notes To-do"
+                className="sidebar-app-logo"
+                aria-hidden="true"
+              />
               <div className="sidebar-toolbar-cluster">
                 <button
                   type="button"

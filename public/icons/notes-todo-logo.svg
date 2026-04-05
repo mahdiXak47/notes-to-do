@@ -1,0 +1,51 @@
+<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" width="200" height="200">
+  <defs>
+    <linearGradient id="folderGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0047ab;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#050557;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="fileGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1a6ed8;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#0047ab;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="shineGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#ffffff;stop-opacity:0.15" />
+      <stop offset="100%" style="stop-color:#ffffff;stop-opacity:0" />
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#050557" flood-opacity="0.35"/>
+    </filter>
+    <clipPath id="folderClip">
+      <rect x="28" y="72" width="144" height="102" rx="10"/>
+    </clipPath>
+  </defs>
+
+  <!-- Folder back -->
+  <rect x="28" y="72" width="144" height="102" rx="10" fill="url(#folderGrad)" filter="url(#shadow)"/>
+
+  <!-- Folder tab -->
+  <path d="M28 72 Q28 60 38 60 L80 60 Q90 60 94 68 L100 78 L28 78 Z" fill="#0047ab"/>
+  <path d="M28 72 Q28 60 38 60 L80 60 Q90 60 94 68 L100 78 L28 78 Z" fill="url(#shineGrad)"/>
+
+  <!-- Folder shine overlay -->
+  <rect x="28" y="72" width="144" height="102" rx="10" fill="url(#shineGrad)" clip-path="url(#folderClip)"/>
+
+  <!-- File / document (overlapping folder) -->
+  <g filter="url(#shadow)">
+    <!-- File body -->
+    <rect x="62" y="52" width="80" height="102" rx="7" fill="url(#fileGrad)"/>
+    <!-- Folded corner -->
+    <path d="M118 52 L142 76 L118 76 Z" fill="#050557" opacity="0.4"/>
+    <path d="M118 52 L142 76 L118 76 Z" fill="white" opacity="0.08"/>
+    <!-- File shine -->
+    <rect x="62" y="52" width="80" height="50" rx="7" fill="url(#shineGrad)"/>
+    <!-- Lines on file -->
+    <rect x="74" y="88" width="48" height="4" rx="2" fill="white" opacity="0.55"/>
+    <rect x="74" y="100" width="38" height="4" rx="2" fill="white" opacity="0.4"/>
+    <rect x="74" y="112" width="44" height="4" rx="2" fill="white" opacity="0.4"/>
+    <rect x="74" y="124" width="30" height="4" rx="2" fill="white" opacity="0.3"/>
+    <!-- Checkmark / todo tick -->
+    <circle cx="82" cy="140" r="8" fill="none" stroke="white" stroke-width="2" opacity="0.7"/>
+    <polyline points="78,140 81,143 87,136" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" opacity="0.9"/>
+  </g>
+</svg>

@@ -46,6 +46,17 @@
   color: #8aa3b5;
 }
 
+.login-logo {
+  display: flex;
+  justify-content: center;
+}
+
+.login-logo-img {
+  width: 100%;
+  max-width: 260px;
+  height: auto;
+}
+
 .auth-loading {
   background-color: var(--palette-alice, #f0f8ff);
   color: #3d5d78;
