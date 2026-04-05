@@ -14,5 +14,6 @@ urlpatterns = [
     path('uploads-list/', views.vault_uploads_list, name='vault-uploads-list'),
     path('uploads/', views.vault_uploads, name='vault-uploads'),
     path('uploads/<str:stored_name>/', views.vault_upload_detail, name='vault-upload-detail'),
+    path('settings/', views.user_settings, name='vault-user-settings'),
     path('', include(router.urls)),
 ]

@@ -224,3 +224,16 @@ class Pin(models.Model):
 
     def __str__(self):
         return f'{self.user_id}:{self.item_type}:{self.item_id}'
+
+
+class UserSettings(models.Model):
+    user = models.OneToOneField(
+        User,
+        on_delete=models.CASCADE,
+        related_name='vault_settings',
+    )
+    skip_file_delete_confirm = models.BooleanField(default=False)
+    skip_folder_delete_confirm = models.BooleanField(default=False)
+
+    def __str__(self):
+        return f'settings:{self.user_id}'

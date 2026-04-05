@@ -23,7 +23,7 @@ class QueryParamJWTAuthentication(JWTAuthentication):
         validated = self.get_validated_token(token)
         return self.get_user(validated), validated
 
-from vault.models import Folder, Note, Pin, UploadedFile
+from vault.models import Folder, Note, Pin, UploadedFile, UserSettings
 from vault.serializers import FolderSerializer, NoteSerializer
 from vault.storage import uploaded_files_root
 
@@ -230,3 +230,29 @@ def vault_upload_detail(request, stored_name: str):
     # DELETE
     record.delete()
     return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+@api_view(['GET', 'PATCH'])
+@permission_classes([permissions.IsAuthenticated])
+def user_settings(request):
+    obj, _ = UserSettings.objects.get_or_create(user=request.user)
+
+    if request.method == 'GET':
+        return Response({
+            'skip_file_delete_confirm': obj.skip_file_delete_confirm,
+            'skip_folder_delete_confirm': obj.skip_folder_delete_confirm,
+        })
+
+    # PATCH — update only provided fields
+    changed = []
+    for field in ('skip_file_delete_confirm', 'skip_folder_delete_confirm'):
+        if field in request.data:
+            value = bool(request.data[field])
+            setattr(obj, field, value)
+            changed.append(field)
+    if changed:
+        obj.save(update_fields=changed)
+    return Response({
+        'skip_file_delete_confirm': obj.skip_file_delete_confirm,
+        'skip_folder_delete_confirm': obj.skip_folder_delete_confirm,
+    })
