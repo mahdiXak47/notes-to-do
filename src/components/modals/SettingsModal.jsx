@@ -1,7 +1,20 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import './VaultModal.css'
+import './SettingsModal.css'
 
-export function SettingsModal({ open, username, onClose }) {
+const NAV_ITEMS = [{ id: 'general', label: 'General' }]
+
+export function SettingsModal({
+  open,
+  username,
+  onClose,
+  skipFileDeleteConfirm,
+  onSkipFileDeleteConfirmChange,
+  skipFolderDeleteConfirm,
+  onSkipFolderDeleteConfirmChange,
+}) {
+  const [activeSection, setActiveSection] = useState('general')
+
   useEffect(() => {
     if (!open) return undefined
     function onKeyDown(e) {
@@ -21,38 +34,86 @@ export function SettingsModal({ open, username, onClose }) {
   return (
     <>
       <div
-        className="modal fade show d-block obs-delete-modal"
+        className="modal fade show d-block settings-modal"
         tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-labelledby="settings-modal-title"
       >
-        <div className="modal-dialog modal-dialog-centered" role="document">
-          <div className="modal-content obs-delete-modal-content text-dark">
-            <div className="modal-header obs-delete-modal-header">
-              <h5 className="modal-title" id="settings-modal-title">
-                Settings
-              </h5>
-              <button
-                type="button"
-                className="btn-close obs-delete-modal-close"
-                aria-label="Close"
-                onClick={onClose}
-              />
-            </div>
-            <div className="modal-body obs-delete-modal-body">
-              <p className="obs-delete-modal-lead m-0">
-                Signed in as <strong>{username}</strong>.
-              </p>
-            </div>
-            <div className="modal-footer obs-delete-modal-footer justify-content-end">
-              <button
-                type="button"
-                className="btn obs-delete-modal-btn-cancel"
-                onClick={onClose}
-              >
-                Close
-              </button>
+        <div className="modal-dialog settings-modal-dialog" role="document">
+          <div className="modal-content settings-modal-content">
+            <div className="settings-layout">
+              {/* Left nav */}
+              <aside className="settings-nav">
+                <div className="settings-nav-title">Options</div>
+                {NAV_ITEMS.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className={`settings-nav-item${activeSection === item.id ? ' settings-nav-item--active' : ''}`}
+                    onClick={() => setActiveSection(item.id)}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </aside>
+
+              {/* Right content */}
+              <div className="settings-content">
+                <div className="settings-content-header">
+                  <h5 className="settings-content-title" id="settings-modal-title">
+                    {NAV_ITEMS.find((i) => i.id === activeSection)?.label}
+                  </h5>
+                  <button
+                    type="button"
+                    className="btn-close settings-close"
+                    aria-label="Close"
+                    onClick={onClose}
+                  />
+                </div>
+
+                {activeSection === 'general' && (
+                  <div className="settings-section">
+                    <p className="settings-account-line">
+                      Signed in as <strong>{username}</strong>
+                    </p>
+
+                    <div className="settings-group-label">Confirmations</div>
+
+                    <div className="settings-row">
+                      <div className="settings-row-text">
+                        <div className="settings-row-title">Skip delete confirmation for files</div>
+                        <div className="settings-row-desc">Delete notes without showing a confirmation dialog.</div>
+                      </div>
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-checked={skipFileDeleteConfirm}
+                        className={`settings-toggle${skipFileDeleteConfirm ? ' settings-toggle--on' : ''}`}
+                        onClick={() => onSkipFileDeleteConfirmChange(!skipFileDeleteConfirm)}
+                      >
+                        <span className="settings-toggle-thumb" />
+                      </button>
+                    </div>
+
+                    <div className="settings-row">
+                      <div className="settings-row-text">
+                        <div className="settings-row-title">Skip delete confirmation for folders</div>
+                        <div className="settings-row-desc">Delete folders without showing a confirmation dialog.</div>
+                      </div>
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-checked={skipFolderDeleteConfirm}
+                        className={`settings-toggle${skipFolderDeleteConfirm ? ' settings-toggle--on' : ''}`}
+                        onClick={() => onSkipFolderDeleteConfirmChange(!skipFolderDeleteConfirm)}
+                      >
+                        <span className="settings-toggle-thumb" />
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>

@@ -1,0 +1,189 @@
+.settings-modal {
+  z-index: 1055;
+}
+
+.settings-modal-dialog {
+  max-width: 760px;
+  width: 100%;
+}
+
+.settings-modal-content {
+  background-color: #ffffff;
+  border: 1px solid rgba(0, 71, 171, 0.2);
+  border-radius: 12px;
+  box-shadow: 0 16px 48px rgba(0, 0, 80, 0.18);
+  overflow: hidden;
+  min-height: 460px;
+}
+
+/* Two-pane layout */
+.settings-layout {
+  display: flex;
+  min-height: 460px;
+}
+
+/* Left nav — matches sidebar dark navy */
+.settings-nav {
+  width: 210px;
+  flex-shrink: 0;
+  background-color: #050557;
+  padding: 1.25rem 0 1rem;
+  border-right: 1px solid rgba(130, 200, 229, 0.25);
+}
+
+.settings-nav-title {
+  font-size: 0.675rem;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: rgba(240, 248, 255, 0.45);
+  padding: 0 1rem 0.6rem;
+}
+
+.settings-nav-item {
+  display: block;
+  width: 100%;
+  padding: 0.45rem 1rem;
+  border: none;
+  background: transparent;
+  color: rgba(240, 248, 255, 0.7);
+  font-size: 0.875rem;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s;
+}
+
+.settings-nav-item:hover {
+  background-color: rgba(130, 200, 229, 0.1);
+  color: #f0f8ff;
+}
+
+.settings-nav-item--active {
+  background-color: rgba(130, 200, 229, 0.18);
+  color: #f0f8ff;
+  font-weight: 500;
+}
+
+/* Right content — matches app light theme */
+.settings-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  background-color: #ffffff;
+}
+
+.settings-content-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.25rem 1.5rem 1rem;
+  border-bottom: 1px solid rgba(0, 71, 171, 0.12);
+  background-color: #f8fcff;
+}
+
+.settings-content-title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--palette-navy, #050557);
+}
+
+.settings-close {
+  opacity: 0.65;
+}
+
+.settings-close:hover {
+  opacity: 1;
+}
+
+.settings-section {
+  padding: 1.25rem 1.5rem;
+}
+
+.settings-account-line {
+  font-size: 0.8125rem;
+  color: #3d5d78;
+  margin: 0 0 1.5rem;
+}
+
+.settings-group-label {
+  font-size: 0.675rem;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: #5a7a95;
+  margin-bottom: 0.6rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 1px solid rgba(0, 71, 171, 0.1);
+}
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  padding: 0.85rem 0;
+  border-bottom: 1px solid rgba(0, 71, 171, 0.07);
+}
+
+.settings-row:last-child {
+  border-bottom: none;
+}
+
+.settings-row-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.settings-row-title {
+  font-size: 0.875rem;
+  color: #0d1b2a;
+  margin-bottom: 0.2rem;
+}
+
+.settings-row-desc {
+  font-size: 0.775rem;
+  color: #3d5d78;
+  line-height: 1.4;
+}
+
+/* Toggle switch — cobalt accent matches app primary */
+.settings-toggle {
+  flex-shrink: 0;
+  width: 42px;
+  height: 24px;
+  border-radius: 12px;
+  border: none;
+  background-color: rgba(0, 71, 171, 0.18);
+  cursor: pointer;
+  padding: 0;
+  position: relative;
+  transition: background-color 0.2s;
+}
+
+.settings-toggle--on {
+  background-color: #0047ab;
+}
+
+.settings-toggle-thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background-color: #fff;
+  transition: transform 0.2s;
+  display: block;
+  box-shadow: 0 1px 3px rgba(0, 0, 80, 0.2);
+}
+
+.settings-toggle--on .settings-toggle-thumb {
+  transform: translateX(18px);
+}
+
+.settings-toggle:focus-visible {
+  outline: 2px solid rgba(130, 200, 229, 0.7);
+  outline-offset: 2px;
+}

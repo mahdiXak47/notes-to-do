@@ -30,7 +30,9 @@ import {
   duplicateNoteAsCopy,
   downloadNoteAsMarkdownFile,
   fetchPins,
+  fetchUserSettings,
   fetchVaultTree,
+  patchUserSettings,
   folderPkFromClientId,
   moveFolderToParent,
   moveNoteToFolder,
@@ -65,8 +67,16 @@ import {
   readVaultUploadBody,
 } from '../lib/vaultUpload.js'
 
-const SKIP_DELETE_CONFIRM_KEY = 'notes_skip_delete_confirm'
+const SKIP_FILE_DELETE_CONFIRM_KEY = 'notes_skip_file_delete_confirm'
+const SKIP_FOLDER_DELETE_CONFIRM_KEY = 'notes_skip_folder_delete_confirm'
 const LINE_NUMBERS_STORAGE_KEY = 'notes_editor_line_numbers'
+
+function readSkipConfirm(key) {
+  try { return localStorage.getItem(key) === '1' } catch { return false }
+}
+function writeSkipConfirm(key, value) {
+  try { localStorage.setItem(key, value ? '1' : '0') } catch { /* ignore */ }
+}
 const LINT_TOAST_DURATION_MS = 6000
 
 function readStoredLineNumbersVisible() {
@@ -114,6 +124,12 @@ function App({ onLogout = () => {}, username = '' }) {
   const [editorPaneMode, setEditorPaneMode] = useState('split')
   const [editorLineNumbersVisible, setEditorLineNumbersVisible] = useState(
     readStoredLineNumbersVisible,
+  )
+  const [skipFileDeleteConfirm, setSkipFileDeleteConfirm] = useState(
+    () => readSkipConfirm(SKIP_FILE_DELETE_CONFIRM_KEY),
+  )
+  const [skipFolderDeleteConfirm, setSkipFolderDeleteConfirm] = useState(
+    () => readSkipConfirm(SKIP_FOLDER_DELETE_CONFIRM_KEY),
   )
   const modLabel = useMemo(() => modKeyLabel(), [])
 
@@ -175,7 +191,15 @@ function App({ onLogout = () => {}, username = '' }) {
       setVaultLoading(true)
       setVaultError(null)
       try {
-        const [raw, pinnedIds] = await Promise.all([fetchVaultTree(), fetchPins()])
+        const [raw, pinnedIds, serverSettings] = await Promise.all([
+          fetchVaultTree(),
+          fetchPins(),
+          fetchUserSettings().catch(() => null),
+        ])
+        if (serverSettings) {
+          setSkipFileDeleteConfirm(serverSettings.skip_file_delete_confirm)
+          setSkipFolderDeleteConfirm(serverSettings.skip_folder_delete_confirm)
+        }
         if (cancelled) return
         const expanded = collectExpandedByFolderId(vaultRef.current)
         dispatch({
@@ -280,7 +304,10 @@ function App({ onLogout = () => {}, username = '' }) {
     if (!deleteModal) return
     if (deleteModalDontAskAgain) {
       try {
-        localStorage.setItem(SKIP_DELETE_CONFIRM_KEY, '1')
+        const key = deleteModal.kind === 'folder' ? SKIP_FOLDER_DELETE_CONFIRM_KEY : SKIP_FILE_DELETE_CONFIRM_KEY
+        writeSkipConfirm(key, true)
+        if (deleteModal.kind === 'folder') setSkipFolderDeleteConfirm(true)
+        else setSkipFileDeleteConfirm(true)
       } catch {
         /* ignore quota / private mode. */
       }
@@ -296,15 +323,12 @@ function App({ onLogout = () => {}, username = '' }) {
 
   const handleDeleteRequest = useCallback(
     (target) => {
-      try {
-        if (localStorage.getItem(SKIP_DELETE_CONFIRM_KEY) === '1') {
-          void runDelete(target).catch((e) => {
-            setVaultError(e instanceof Error ? e.message : 'Delete failed.')
-          })
-          return
-        }
-      } catch {
-        /* fall through to modal. */
+      const key = target.kind === 'folder' ? SKIP_FOLDER_DELETE_CONFIRM_KEY : SKIP_FILE_DELETE_CONFIRM_KEY
+      if (readSkipConfirm(key)) {
+        void runDelete(target).catch((e) => {
+          setVaultError(e instanceof Error ? e.message : 'Delete failed.')
+        })
+        return
       }
       openDeleteModal(target)
     },
@@ -1053,6 +1077,18 @@ function App({ onLogout = () => {}, username = '' }) {
         open={settingsModalOpen}
         username={username}
         onClose={closeSettingsModal}
+        skipFileDeleteConfirm={skipFileDeleteConfirm}
+        onSkipFileDeleteConfirmChange={(v) => {
+          setSkipFileDeleteConfirm(v)
+          writeSkipConfirm(SKIP_FILE_DELETE_CONFIRM_KEY, v)
+          void patchUserSettings({ skip_file_delete_confirm: v })
+        }}
+        skipFolderDeleteConfirm={skipFolderDeleteConfirm}
+        onSkipFolderDeleteConfirmChange={(v) => {
+          setSkipFolderDeleteConfirm(v)
+          writeSkipConfirm(SKIP_FOLDER_DELETE_CONFIRM_KEY, v)
+          void patchUserSettings({ skip_folder_delete_confirm: v })
+        }}
       />
 
       <DeleteConfirmModal
