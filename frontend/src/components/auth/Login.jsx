@@ -33,7 +33,13 @@ export default function Login({ onSuccess }) {
     <div className="login-page">
       <div className="login-card card border-secondary">
         <div className="card-body p-4">
-          <h1 className="login-title h4 mb-1">Notes &amp; To-do</h1>
+          <div className="login-logo mb-3">
+            <img
+              src="/icons/notes-todo-logo-lockup.svg"
+              alt="Notes To-do"
+              className="login-logo-img"
+            />
+          </div>
           <p className="login-subtitle small mb-4">Sign in to open the vault</p>
 
           {showSuccess ? (
