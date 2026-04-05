@@ -54,6 +54,21 @@ export function collectExpandedByFolderId(nodes, acc = {}) {
   return acc
 }
 
+export async function fetchUserSettings() {
+  const res = await authorizedFetch('/api/vault/settings/', { method: 'GET' })
+  if (!res.ok) throw new Error(`Failed to load settings (${res.status}).`)
+  return res.json()
+}
+
+export async function patchUserSettings(patch) {
+  const res = await authorizedFetch('/api/vault/settings/', {
+    method: 'PATCH',
+    body: JSON.stringify(patch),
+  })
+  if (!res.ok) throw new Error(`Failed to save settings (${res.status}).`)
+  return res.json()
+}
+
 /** Fetch all pins and return them as a pinnedIds map: { 'f-5': true, 'n-3': true } */
 export async function fetchPins() {
   const res = await authorizedFetch('/api/vault/pins/', { method: 'GET' })
