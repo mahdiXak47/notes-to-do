@@ -93,6 +93,21 @@ function findParentUidForFolderUnder(parentFolder, targetFolderId) {
   return undefined
 }
 
+export function isFolderDescendantOf(vault, folderId, ancestorId) {
+  function findFolder(nodes, id) {
+    for (const n of nodes) {
+      if (n.type !== 'folder') continue
+      if (n.id === id) return n
+      const f = findFolder(n.children || [], id)
+      if (f) return f
+    }
+    return null
+  }
+  const ancestor = findFolder(vault, ancestorId)
+  if (!ancestor) return false
+  return Boolean(findFolder(ancestor.children || [], folderId))
+}
+
 export function listFolderMoveTargets(vault, excludeFolderIds) {
   const exclude = excludeFolderIds ?? new Set()
   const out = [{ folderUid: null, label: 'Vault root' }]
