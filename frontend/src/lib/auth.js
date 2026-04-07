@@ -38,6 +38,32 @@ function isAccessValid(token, skewMs = 5000) {
   return expMs > Date.now() + skewMs
 }
 
+export async function registerUser({ firstName, lastName, username, email, password }) {
+  const res = await fetch(apiUrl('/api/auth/register/'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      first_name: firstName,
+      last_name: lastName,
+      username,
+      email,
+      password,
+    }),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) {
+    const firstError =
+      data.detail ||
+      data.username?.[0] ||
+      data.email?.[0] ||
+      data.password?.[0] ||
+      data.first_name?.[0] ||
+      data.last_name?.[0] ||
+      'Registration failed.'
+    throw new Error(typeof firstError === 'string' ? firstError : 'Registration failed.')
+  }
+}
+
 export async function loginWithPassword(username, password) {
   const res = await fetch(apiUrl('/api/auth/token/'), {
     method: 'POST',
