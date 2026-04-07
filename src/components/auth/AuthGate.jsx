@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import App from '../../app/App.jsx'
 import Login from './Login.jsx'
+import Signup from './Signup.jsx'
 import {
   clearStoredToken,
   ensureSession,
@@ -84,8 +85,17 @@ export default function AuthGate() {
     )
   }
 
+  if (phase === 'signup') {
+    return (
+      <Signup
+        onSuccess={handleLoginSuccess}
+        onGoToLogin={() => setPhase('guest')}
+      />
+    )
+  }
+
   if (phase === 'guest') {
-    return <Login onSuccess={handleLoginSuccess} />
+    return <Login onSuccess={handleLoginSuccess} onGoToSignup={() => setPhase('signup')} />
   }
 
   return (

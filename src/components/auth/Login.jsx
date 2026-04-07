@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { loginWithPassword } from '../../lib/auth.js'
 import './Login.css'
 
-export default function Login({ onSuccess }) {
+export default function Login({ onSuccess, onGoToSignup }) {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -85,11 +85,24 @@ export default function Login({ onSuccess }) {
               </div>
               <button
                 type="submit"
-                className="btn btn-primary w-100"
+                className="btn btn-primary w-100 mb-3"
                 disabled={busy}
               >
                 {busy ? 'Signing in…' : 'Sign in'}
               </button>
+
+              <p className="text-center small mb-0" style={{ color: '#5a7a95' }}>
+                Not registered yet?{' '}
+                <button
+                  type="button"
+                  className="btn btn-link btn-sm p-0 align-baseline"
+                  style={{ color: '#0047ab', textDecoration: 'underline' }}
+                  onClick={onGoToSignup}
+                  disabled={busy}
+                >
+                  Sign up here
+                </button>
+              </p>
             </form>
           )}
         </div>
