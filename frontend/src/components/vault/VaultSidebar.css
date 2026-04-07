@@ -534,3 +534,38 @@
   color: var(--obs-icon-dim);
   text-transform: uppercase;
 }
+
+/* ── Drag-and-drop ─────────────────────────────────────────── */
+
+.tree-row-wrap.is-drag-over {
+  background-color: rgba(0, 71, 171, 0.18);
+  outline: 1.5px solid rgba(0, 71, 171, 0.5);
+  outline-offset: -1px;
+  border-radius: 3px;
+}
+
+.root-drop-zone {
+  display: none;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0.25rem 0.35rem;
+  padding: 0.35rem 0.6rem;
+  border-radius: 4px;
+  border: 1.5px dashed rgba(130, 200, 229, 0.3);
+  font-size: 0.75rem;
+  color: var(--obs-icon-dim);
+  cursor: default;
+  transition: background-color 0.1s, border-color 0.1s, color 0.1s;
+}
+
+/* Only show the zone while something is being dragged */
+.sidebar-tree:has([draggable="true"]:active) .root-drop-zone,
+.root-drop-zone--active {
+  display: flex;
+}
+
+.root-drop-zone--active {
+  background-color: rgba(0, 71, 171, 0.14);
+  border-color: rgba(0, 71, 171, 0.5);
+  color: #82c8e5;
+}

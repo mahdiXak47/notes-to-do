@@ -55,6 +55,7 @@ import {
   findFile,
   findParentFolderUidForFile,
   findParentFolderUidForFolder,
+  isFolderDescendantOf,
   listFolderMoveTargets,
 } from '../lib/vaultTreePaths.js'
 import { useFolderRename } from '../hooks/useFolderRename.js'
@@ -583,6 +584,47 @@ function App({ onLogout = () => {}, username = '' }) {
     [moveModal, state.vault, syncVaultFromServer, closeMoveModal],
   )
 
+  const onMoveItem = useCallback(
+    async (draggedNode, draggedKind, targetFolderUid) => {
+      if (vaultLoading) return
+      // Prevent moving a folder into itself or its own descendant
+      if (
+        draggedKind === 'folder' &&
+        (targetFolderUid === draggedNode.id ||
+          isFolderDescendantOf(state.vault, targetFolderUid, draggedNode.id))
+      ) return
+      // No-op if already in that location
+      if (draggedKind === 'file') {
+        const cur = findParentFolderUidForFile(state.vault, draggedNode.id)
+        if (cur === targetFolderUid) return
+        const pk = notePkFromClientId(draggedNode.id)
+        if (pk == null) return
+        const targetPk = targetFolderUid == null ? null : folderPkFromClientId(targetFolderUid)
+        try {
+          setVaultError(null)
+          await moveNoteToFolder(pk, targetPk)
+          await syncVaultFromServer()
+        } catch (e) {
+          setVaultError(e instanceof Error ? e.message : 'Move failed.')
+        }
+      } else {
+        const curParent = findParentFolderUidForFolder(state.vault, draggedNode.id)
+        if (curParent === targetFolderUid) return
+        const pk = folderPkFromClientId(draggedNode.id)
+        if (pk == null) return
+        const targetPk = targetFolderUid == null ? null : folderPkFromClientId(targetFolderUid)
+        try {
+          setVaultError(null)
+          await moveFolderToParent(pk, targetPk)
+          await syncVaultFromServer()
+        } catch (e) {
+          setVaultError(e instanceof Error ? e.message : 'Move failed.')
+        }
+      }
+    },
+    [vaultLoading, state.vault, syncVaultFromServer],
+  )
+
   const onVaultContextAction = useCallback(
     (action, kind, node) => {
       void (async () => {
@@ -988,6 +1030,7 @@ function App({ onLogout = () => {}, username = '' }) {
           setSettingsModalOpen={setSettingsModalOpen}
           onVaultContextAction={onVaultContextAction}
           onUploadContextAction={onUploadContextAction}
+          onMoveItem={onMoveItem}
         />
 
         <section className="editor-pane" aria-label="Editor">

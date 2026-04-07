@@ -6,6 +6,7 @@ import './VaultSidebar.css'
 import {
   findBreadcrumb,
   findFolderBreadcrumb,
+  isFolderDescendantOf,
   pathJoined,
   splitDirAndFileName,
 } from '../../lib/vaultTreePaths.js'
@@ -312,6 +313,8 @@ function FileTreeRow({
   vaultLoading,
   onRequestNoteTitleEdit,
   onOpenFileContextMenu,
+  onDragStart,
+  onDragEnd,
 }) {
   const pathSegs = findBreadcrumb(vault, node.id)
   const pinned = Boolean(pinnedIds[node.id])
@@ -329,8 +332,10 @@ function FileTreeRow({
         <button
           type="button"
           className="tree-row tree-row-main"
-          draggable={false}
-          title="Click to open · Double-click to rename"
+          draggable={!vaultLoading}
+          title="Click to open · Double-click to rename · Drag to move"
+          onDragStart={(e) => onDragStart?.(e, node, 'file')}
+          onDragEnd={onDragEnd}
           onClick={() => dispatch({ type: 'OPEN_FILE', id: node.id })}
           onDoubleClick={(e) => {
             e.preventDefault()
@@ -412,6 +417,11 @@ function TreeRows({
   onRequestNoteTitleEdit,
   onOpenFileContextMenu,
   onOpenFolderContextMenu,
+  dragOverId,
+  onDragStart,
+  onDragEnd,
+  onDragOverFolder,
+  onDropOnFolder,
 }) {
   const rows = []
   for (const node of nodes) {
@@ -419,6 +429,7 @@ function TreeRows({
       const expanded = expandedOverrides ? true : node.expanded
       const pinned = Boolean(pinnedIds[node.id])
       const isRenaming = folderRenameId === node.id
+      const isDragOver = dragOverId === node.id
       rows.push(
         <div
           key={node.id}
@@ -426,12 +437,19 @@ function TreeRows({
           style={{ paddingLeft: `${depth * 0.65}rem` }}
         >
           <div
-            className={`tree-row-wrap ${focusedFolderId === node.id ? 'is-folder-focused' : ''}`}
+            className={`tree-row-wrap ${focusedFolderId === node.id ? 'is-folder-focused' : ''}${isDragOver ? ' is-drag-over' : ''}`}
             onContextMenu={(e) => {
               if (vaultLoading || isRenaming) return
               e.preventDefault()
               onOpenFolderContextMenu(e, node)
             }}
+            onDragOver={(e) => onDragOverFolder?.(e, node.id)}
+            onDragLeave={(e) => {
+              if (!e.currentTarget.contains(e.relatedTarget)) {
+                onDragOverFolder?.(e, null)
+              }
+            }}
+            onDrop={(e) => onDropOnFolder?.(e, node.id)}
           >
             <button
               type="button"
@@ -484,8 +502,8 @@ function TreeRows({
               <button
                 type="button"
                 className="tree-row tree-row-main tree-row-folder-label"
-                draggable={false}
-                title="Double-click or press Enter to rename"
+                draggable={!vaultLoading}
+                title="Double-click or press Enter to rename · Drag to move"
                 onClick={() => onFolderRowFocus(node.id)}
                 onDoubleClick={(e) => {
                   e.preventDefault()
@@ -496,6 +514,8 @@ function TreeRows({
                   e.preventDefault()
                   onStartFolderRename(node.id, node.name)
                 }}
+                onDragStart={(e) => onDragStart?.(e, node, 'folder')}
+                onDragEnd={onDragEnd}
               >
                 <i className={`bi ${expanded ? 'bi-folder2-open' : 'bi-folder2'} tree-item-icon`} aria-hidden />
                 {pinned ? (
@@ -576,6 +596,11 @@ function TreeRows({
                 onRequestNoteTitleEdit={onRequestNoteTitleEdit}
                 onOpenFileContextMenu={onOpenFileContextMenu}
                 onOpenFolderContextMenu={onOpenFolderContextMenu}
+                dragOverId={dragOverId}
+                onDragStart={onDragStart}
+                onDragEnd={onDragEnd}
+                onDragOverFolder={onDragOverFolder}
+                onDropOnFolder={onDropOnFolder}
               />
             </div>
           ) : null}
@@ -597,6 +622,8 @@ function TreeRows({
           vaultLoading={vaultLoading}
           onRequestNoteTitleEdit={onRequestNoteTitleEdit}
           onOpenFileContextMenu={onOpenFileContextMenu}
+          onDragStart={onDragStart}
+          onDragEnd={onDragEnd}
         />,
       )
     }
@@ -710,12 +737,16 @@ export function VaultSidebar({
   setSettingsModalOpen,
   onVaultContextAction,
   onUploadContextAction,
+  onMoveItem,
 }) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(readSidebarCollapsed)
   const [footerMenuOpen, setFooterMenuOpen] = useState(false)
   const [aboutModalOpen, setAboutModalOpen] = useState(false)
   const [ctxMenu, setCtxMenu] = useState(null)
   const [uploadRename, setUploadRename] = useState(null) // { id, draft }
+  const [dragOverId, setDragOverId] = useState(null) // folder id being hovered
+  const [rootDropActive, setRootDropActive] = useState(false)
+  const draggedRef = useRef(null) // { node, kind }
   const uploadRenameInputRef = useRef(null)
   const uploadRenameLastIdRef = useRef(null)
   const sidebarFooterRef = useRef(null)
@@ -760,6 +791,66 @@ export function VaultSidebar({
   const openFolderContextMenu = useCallback((e, node) => {
     setCtxMenu({ x: e.clientX, y: e.clientY, kind: 'folder', node })
   }, [])
+
+  const handleDragStart = useCallback((e, node, kind) => {
+    draggedRef.current = { node, kind }
+    e.dataTransfer.effectAllowed = 'move'
+    e.dataTransfer.setData('text/plain', node.id)
+  }, [])
+
+  const handleDragEnd = useCallback(() => {
+    draggedRef.current = null
+    setDragOverId(null)
+    setRootDropActive(false)
+  }, [])
+
+  const handleDragOverFolder = useCallback((e, folderId) => {
+    e.preventDefault()
+    e.stopPropagation()
+    const dragged = draggedRef.current
+    if (!dragged) return
+    // Block: can't drop a folder onto itself or its own descendant
+    if (
+      dragged.kind === 'folder' &&
+      folderId != null &&
+      (folderId === dragged.node.id || isFolderDescendantOf(vault, folderId, dragged.node.id))
+    ) {
+      e.dataTransfer.dropEffect = 'none'
+      return
+    }
+    e.dataTransfer.dropEffect = 'move'
+    setDragOverId(folderId)
+    setRootDropActive(false)
+  }, [vault])
+
+  const handleDropOnFolder = useCallback((e, folderId) => {
+    e.preventDefault()
+    e.stopPropagation()
+    const dragged = draggedRef.current
+    draggedRef.current = null
+    setDragOverId(null)
+    if (!dragged) return
+    onMoveItem?.(dragged.node, dragged.kind, folderId)
+  }, [onMoveItem])
+
+  const handleDragOverRoot = useCallback((e) => {
+    e.preventDefault()
+    const dragged = draggedRef.current
+    if (!dragged) return
+    e.dataTransfer.dropEffect = 'move'
+    setDragOverId(null)
+    setRootDropActive(true)
+  }, [])
+
+  const handleDropOnRoot = useCallback((e) => {
+    e.preventDefault()
+    const dragged = draggedRef.current
+    draggedRef.current = null
+    setRootDropActive(false)
+    setDragOverId(null)
+    if (!dragged) return
+    onMoveItem?.(dragged.node, dragged.kind, null)
+  }, [onMoveItem])
 
   const toggleSidebarCollapsed = useCallback((collapsed) => {
     setSidebarCollapsed(collapsed)
@@ -1010,6 +1101,8 @@ export function VaultSidebar({
                           vaultLoading={vaultLoading}
                           onRequestNoteTitleEdit={onRequestNoteTitleEdit}
                           onOpenFileContextMenu={openFileContextMenu}
+                          onDragStart={handleDragStart}
+                          onDragEnd={handleDragEnd}
                         />
                       ))}
                     </div>
@@ -1130,7 +1223,22 @@ export function VaultSidebar({
                   onRequestNoteTitleEdit={onRequestNoteTitleEdit}
                   onOpenFileContextMenu={openFileContextMenu}
                   onOpenFolderContextMenu={openFolderContextMenu}
+                  dragOverId={dragOverId}
+                  onDragStart={handleDragStart}
+                  onDragEnd={handleDragEnd}
+                  onDragOverFolder={handleDragOverFolder}
+                  onDropOnFolder={handleDropOnFolder}
                 />
+              ) : null}
+              {!vaultLoading ? (
+                <div
+                  className={`root-drop-zone${rootDropActive ? ' root-drop-zone--active' : ''}`}
+                  onDragOver={handleDragOverRoot}
+                  onDragLeave={() => setRootDropActive(false)}
+                  onDrop={handleDropOnRoot}
+                >
+                  <i className="bi bi-house" aria-hidden /> Move to vault root
+                </div>
               ) : null}
             </div>
             <div className="sidebar-footer" ref={sidebarFooterRef}>
