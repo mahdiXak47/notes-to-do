@@ -13,12 +13,23 @@ SECRET_KEY = os.environ.get(
 
 DEBUG = os.environ.get('DJANGO_DEBUG', 'true').lower() in ('1', 'true', 'yes')
 
-ALLOWED_HOSTS = ['0.0.0.0', 'localhost', '127.0.0.1', 'notestodo-core.darkube.app', 'notes-to-do.darkube.app']
+ALLOWED_HOSTS = [
+    '0.0.0.0',
+    'localhost',
+    '127.0.0.1',
+    'notestodo-core.darkube.app',
+    'notes-to-do.darkube.app',
+    'notestodo.mahdixak.ir',
+]
+_extra_hosts = os.environ.get('DJANGO_ALLOWED_HOSTS', '').strip()
+if _extra_hosts:
+    ALLOWED_HOSTS.extend(h.strip() for h in _extra_hosts.split(',') if h.strip())
 
 # Scheme + host; required for admin and any HTTPS POST when DEBUG is False (and recommended always).
 CSRF_TRUSTED_ORIGINS = [
     'https://notestodo-core.darkube.app',
     'https://notes-to-do.darkube.app',
+    'https://notestodo.mahdixak.ir',
 ]
 _extra_csrf = os.environ.get('DJANGO_CSRF_TRUSTED_ORIGINS', '').strip()
 if _extra_csrf:
@@ -202,7 +213,7 @@ CORS_ALLOWED_ORIGINS = [
     o.strip()
     for o in os.environ.get(
         'DJANGO_CORS_ALLOWED_ORIGINS',
-        'http://127.0.0.1:5173,http://localhost:5173',
+        'http://127.0.0.1:5173,http://localhost:5173,https://notestodo.mahdixak.ir',
     ).split(',')
     if o.strip()
 ]
