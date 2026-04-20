@@ -1,0 +1,258 @@
+import mimetypes
+import uuid
+from collections import defaultdict
+from pathlib import Path
+
+from django.http import Http404, HttpResponse
+from rest_framework import permissions, status, viewsets
+from rest_framework.decorators import api_view, authentication_classes, permission_classes
+from rest_framework.response import Response
+from rest_framework_simplejwt.authentication import JWTAuthentication
+
+
+class QueryParamJWTAuthentication(JWTAuthentication):
+    """Accepts JWT from ?access_token= query param (needed for <img> tags)."""
+
+    def authenticate(self, request):
+        result = super().authenticate(request)
+        if result is not None:
+            return result
+        token = request.query_params.get('access_token')
+        if not token:
+            return None
+        validated = self.get_validated_token(token)
+        return self.get_user(validated), validated
+
+from vault.models import Folder, Note, Pin, UploadedFile, UserSettings
+from vault.serializers import FolderSerializer, NoteSerializer
+from vault.storage import uploaded_files_root
+
+
+class FolderViewSet(viewsets.ModelViewSet):
+    serializer_class = FolderSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        return Folder.objects.filter(user=self.request.user)
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+
+class NoteViewSet(viewsets.ModelViewSet):
+    serializer_class = NoteSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        return Note.objects.filter(user=self.request.user)
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+
+def _sort_root_nodes(nodes):
+    def key(n):
+        return (0 if n['type'] == 'folder' else 1, n['name'].lower())
+
+    nodes.sort(key=key)
+
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def vault_tree(request):
+    user = request.user
+    folders = list(Folder.objects.filter(user=user))
+    notes = list(Note.objects.filter(user=user))
+    children_folders = defaultdict(list)
+    for f in folders:
+        children_folders[f.parent_id].append(f)
+    children_notes = defaultdict(list)
+    for n in notes:
+        children_notes[n.folder_id].append(n)
+    for bucket in children_folders.values():
+        bucket.sort(key=lambda x: x.name.lower())
+    for bucket in children_notes.values():
+        bucket.sort(key=lambda x: x.name.lower())
+
+    def build_folder(folder):
+        subs = children_folders.get(folder.id, [])
+        ns = children_notes.get(folder.id, [])
+        ch = [build_folder(sf) for sf in subs] + [build_note(note) for note in ns]
+        _sort_root_nodes(ch)
+        return {
+            'id': folder.id,
+            'kind': 'folder',
+            'type': 'folder',
+            'name': folder.name,
+            'children': ch,
+            'created_at': folder.created_at.isoformat(),
+        }
+
+    def build_note(note):
+        return {
+            'id': note.id,
+            'kind': 'note',
+            'type': 'file',
+            'name': note.name,
+            'content': note.read_content(),
+            'meta': None,
+            'created_at': note.created_at.isoformat(),
+        }
+
+    root = [build_folder(f) for f in children_folders.get(None, [])] + [
+        build_note(n) for n in children_notes.get(None, [])
+    ]
+    _sort_root_nodes(root)
+    return Response(root)
+
+
+@api_view(['GET', 'POST'])
+@permission_classes([permissions.IsAuthenticated])
+def vault_pins(request):
+    user = request.user
+    if request.method == 'GET':
+        pins = Pin.objects.filter(user=user).values('item_type', 'item_id')
+        return Response(list(pins))
+
+    # POST — create a pin
+    item_type = (request.data.get('item_type') or '').strip()
+    item_id = request.data.get('item_id')
+
+    if item_type not in (Pin.FOLDER, Pin.NOTE):
+        return Response(
+            {'detail': 'item_type must be "folder" or "note".'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    try:
+        item_id = int(item_id)
+    except (TypeError, ValueError):
+        return Response(
+            {'detail': 'item_id must be an integer.'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    pin, created = Pin.objects.get_or_create(user=user, item_type=item_type, item_id=item_id)
+    return Response(
+        {'item_type': pin.item_type, 'item_id': pin.item_id},
+        status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
+    )
+
+
+@api_view(['DELETE'])
+@permission_classes([permissions.IsAuthenticated])
+def vault_pin_delete(request, item_type: str, item_id: int):
+    deleted, _ = Pin.objects.filter(
+        user=request.user,
+        item_type=item_type,
+        item_id=item_id,
+    ).delete()
+    if not deleted:
+        raise Http404('Pin not found.')
+    return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def vault_uploads(request):
+    files = request.FILES.getlist('files')
+    if not files:
+        return Response({'detail': 'No files provided.'}, status=status.HTTP_400_BAD_REQUEST)
+    upload_dir = uploaded_files_root(request.user.username)
+    upload_dir.mkdir(parents=True, exist_ok=True)
+    items = []
+    for f in files:
+        ext = Path(f.name).suffix.lower()
+        stored_name = f'{uuid.uuid4().hex}{ext}'
+        dest = upload_dir / stored_name
+        with dest.open('wb') as out:
+            for chunk in f.chunks():
+                out.write(chunk)
+        mime = f.content_type or mimetypes.guess_type(f.name)[0] or 'application/octet-stream'
+        record = UploadedFile.objects.create(
+            user=request.user,
+            stored_name=stored_name,
+            original_name=f.name,
+            mime_type=mime,
+            size=f.size,
+        )
+        items.append({
+            'id': record.stored_name,
+            'original_name': record.original_name,
+            'mime_type': record.mime_type,
+            'size': record.size,
+        })
+    return Response({'items': items}, status=status.HTTP_201_CREATED)
+
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def vault_uploads_list(request):
+    uploads = UploadedFile.objects.filter(user=request.user)
+    items = [
+        {
+            'id': u.stored_name,
+            'original_name': u.original_name,
+            'mime_type': u.mime_type,
+            'size': u.size,
+        }
+        for u in uploads
+    ]
+    return Response(items)
+
+
+@api_view(['GET', 'PATCH', 'DELETE'])
+@authentication_classes([QueryParamJWTAuthentication])
+@permission_classes([permissions.IsAuthenticated])
+def vault_upload_detail(request, stored_name: str):
+    try:
+        record = UploadedFile.objects.get(user=request.user, stored_name=stored_name)
+    except UploadedFile.DoesNotExist:
+        raise Http404('Upload not found.')
+
+    if request.method == 'GET':
+        path = record.disk_path()
+        if not path.is_file():
+            raise Http404('File not found on disk.')
+        with path.open('rb') as fh:
+            content = fh.read()
+        response = HttpResponse(content, content_type=record.mime_type or 'application/octet-stream')
+        response['Content-Disposition'] = f'inline; filename="{record.original_name}"'
+        return response
+
+    if request.method == 'PATCH':
+        new_name = (request.data.get('name') or '').strip()
+        if not new_name:
+            return Response({'detail': 'Name is required.'}, status=status.HTTP_400_BAD_REQUEST)
+        record.original_name = new_name
+        record.save(update_fields=['original_name'])
+        return Response({'id': record.stored_name, 'original_name': record.original_name})
+
+    # DELETE
+    record.delete()
+    return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+@api_view(['GET', 'PATCH'])
+@permission_classes([permissions.IsAuthenticated])
+def user_settings(request):
+    obj, _ = UserSettings.objects.get_or_create(user=request.user)
+
+    if request.method == 'GET':
+        return Response({
+            'skip_file_delete_confirm': obj.skip_file_delete_confirm,
+            'skip_folder_delete_confirm': obj.skip_folder_delete_confirm,
+        })
+
+    # PATCH — update only provided fields
+    changed = []
+    for field in ('skip_file_delete_confirm', 'skip_folder_delete_confirm'):
+        if field in request.data:
+            value = bool(request.data[field])
+            setattr(obj, field, value)
+            changed.append(field)
+    if changed:
+        obj.save(update_fields=changed)
+    return Response({
+        'skip_file_delete_confirm': obj.skip_file_delete_confirm,
+        'skip_folder_delete_confirm': obj.skip_folder_delete_confirm,
+    })

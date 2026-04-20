@@ -1,0 +1,9 @@
+.venv/
+vault/__pycache__/
+config/__pycache__/
+accounts/__pycache__/
+*.py[cod]
+db.sqlite3
+media/
+staticfiles/
+
