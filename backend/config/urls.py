@@ -14,11 +14,22 @@ Including another URLconf
     1. Import the include() function: from django.urls import include, path
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
+import pathlib
+
+from django.conf import settings
 from django.contrib import admin
-from django.urls import include, path
+from django.http import FileResponse
+from django.urls import include, path, re_path
+
+
+def spa_index(request):
+    index = pathlib.Path(settings.BASE_DIR) / 'frontend_build' / 'index.html'
+    return FileResponse(index.open('rb'), content_type='text/html')
+
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/auth/', include('accounts.urls')),
     path('api/vault/', include('vault.urls')),
+    re_path(r'^.*$', spa_index),
 ]

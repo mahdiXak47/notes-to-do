@@ -19,6 +19,7 @@ ALLOWED_HOSTS = [
     '127.0.0.1',
     'notestodo-core.darkube.app',
     'notes-to-do.darkube.app',
+    'notes-to-do.darkube.ir',
     'notestodo.mahdixak.ir',
 ]
 _extra_hosts = os.environ.get('DJANGO_ALLOWED_HOSTS', '').strip()
@@ -44,7 +45,6 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'corsheaders',
     'rest_framework',
     'rest_framework_simplejwt',
     'accounts',
@@ -54,7 +54,6 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
-    'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -172,6 +171,10 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
+
+# Serve the built React SPA from / via whitenoise (falls through to Django catch-all if not found)
+WHITENOISE_ROOT = BASE_DIR / 'frontend_build'
+
 STORAGES = {
     'default': {
         'BACKEND': 'django.core.files.storage.FileSystemStorage',
@@ -208,12 +211,3 @@ SIMPLE_JWT = {
     'AUTH_HEADER_TYPES': ('Bearer',),
 }
 
-CORS_ALLOW_CREDENTIALS = True
-CORS_ALLOWED_ORIGINS = [
-    o.strip()
-    for o in os.environ.get(
-        'DJANGO_CORS_ALLOWED_ORIGINS',
-        'http://127.0.0.1:5173,http://localhost:5173,https://notestodo.mahdixak.ir',
-    ).split(',')
-    if o.strip()
-]
