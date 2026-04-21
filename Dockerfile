@@ -49,8 +49,8 @@ COPY backend/docker-entrypoint.sh /docker-entrypoint.sh
 
 RUN python manage.py collectstatic --noinput \
     && chmod +x /docker-entrypoint.sh \
-    && adduser --disabled-password --gecos '' --no-create-home appuser \
-    && chown -R appuser:appuser /app /docker-entrypoint.sh
+    && adduser --disabled-password --gecos '' appuser \
+    && chown -R appuser:appuser /app /docker-entrypoint.sh /home/appuser
 
 USER appuser
 
