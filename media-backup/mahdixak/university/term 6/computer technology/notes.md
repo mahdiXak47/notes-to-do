@@ -1,0 +1,47 @@
+- SSTable: Sorted String Table 
+	- یک نوع ساختار داده‌ای روی دیسک هست که cassandra این شکلی پیاده شده. 
+	- هدف این هست که داده‌ها به صورت مرتب و غیر قابل جابجایی (immutable) نوشته بشن که خواندن رو سریع‌تر کنه نوشتن هم این شکلی کار‌آمد‌تر میشه 
+	- رکورد‌ها بر اساس کلید ذخیره‌ میشن و هنگام خواند binary search روشون زده میشه 
+	- خب سوال پیش میاد اگه یه داده لازم باشه اپدیت بشه چی؟ اون موقع داده آپدیت شده نوشته میشه و بعدا داده قبلی پاک میشه و replace اتفاق نمی‌افته
+	- فایل SSTable سه بخش اصلی داره 
+		- data-block: data will save here as key-values 
+		- index-block: pointers pointing to each key 
+		- bloom filter & summary: 
+			- summary: نسخه کوچک‌تر از ایندکس برای سرچ سریع‌تر
+			- bloom filter: ساختاری که بشه بدون نیاز به سرچ کردن توی فایل بفهمیم که فلان کلید آیا تو این جدول هست یا نه 
+- read and write in LSM-Tree like Cassandra: 
+	- insert or update: 
+		- data will be written in the MemTable in memorys
+		- when memTable is filled it will be flushed to disk az an SSTable file 
+		- after a period of time SSTables will be compation together
+	- read: 
+		- first the memTable will be searched 
+		- then the bloom filter will be checked to make sure that the key is existed to the SSTable
+		- if there was it will use offset and index to find the value 
+- Event-Driven Architecture with Kafka
+	- تو این معماری هسته ارتباطات ایونت‌ها هستند. 
+	- ایوینت به معنی یک اکشنی‌ هست که انجام میشه یا حتی لاگ 
+	- ایونت ها توسط publisher ها ارسال میشن و سرویس‌هایی که بخوان در جریان این ایونت قرار بگیرن به عنوان subscriber این ایونت‌هارو می‌خونن یا حتی روش اکشن می‌زنن 
+	- خوبیش اینه سرویس‌ها به راحتی می‌تونن از همدیگه جدا باشن و پروسس‌ها به صورت async می‌تونن در جریان باشن 
+	- حالا کافکا چیه؟ کافکا یک Event Streaming Platform عه. یا میشه گفت یه message broker خیلی سریع که سرویس‌ها بیان توش ایونت‌هارو بریزن و subscriber ها بیان بخونن. 
+	- حالا بریم سراغ اجزای کافکا: 
+		- producer: سرویس‌هایی که ایونت تولید می‌کنند
+		- topic: کانال انتشار / مشترک شدن رویداد‌ها
+		- partition: تقسیم کردن بار پیام‌ها برای کاهش لود و موازی سازی
+		- consumer: دریافت‌کننده ایونت‌ها
+		- consumer group: گروهی‌ از مصرف‌کننده ها که ایونت‌ها باهاشون به اشتراک گذاشته میشه
+	- حالا بریم سراغ ویژگی‌های کافکا: 
+		- اول اینکه پیام‌ها رو توی دیسک ذخیره می‌کنه اکثر mq ها اینکارو نمی‌کنن 
+		- پیام‌هارو از اول میشه دوباره خوند 
+		- حجم زیادی از ایونت‌هارو میشه باهاش مدیریت کرد
+		- هم برای consumer و هم برای producer قابل scale هست مخصوصا scale افقی 
+		- برای معماری‌های microsevice و even sourcing خیلی مناسبه
+
+
+- apache Hadoop
+	- **فریم‌ورک متن‌باز** برای ذخیره‌سازی و پردازش داده‌های حجیم (Big Data) به‌صورت توزیع‌شده است.
+	- خلاصه خوبیش اینه که داده‌ها بین چندین سرور پخش هستن و امکان پردازش موازی توش وجود داره 
+	- دو قسمت اصلی داره
+		- **HDFS (Hadoop Distributed File System)**
+			- 
+		- **MapReduce**

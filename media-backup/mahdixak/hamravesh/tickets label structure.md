@@ -1,0 +1,86 @@
+## lables:
+
+### main labels: 
+
+- network 
+	- dns issues --> dns
+	- connection issues
+		- packets are not reaching --> connection
+		- bad gateway problem --> bad-gateway 
+			- 504 error code --> 504
+		- bad request (400)
+	- source ip blocked on connection
+	- filtering
+		- setting proxy for service --> hecant
+	- SSL problems 
+	- 
+- service-problems
+	- tickets that are related to incidents --> incident
+	- mailer not sending emails 
+	- can not create or edit app 
+	- known issues
+	- can not sign in
+	- imagepull backoff
+	- no node available 
+	- resource problems 
+- related-to-other-teams
+	- sentry
+	- logs (maratus)
+	- database (lamalus)
+	- object storage (camedus)
+	- darkube (gherghi)
+	- backup (backup-gherghi)
+	- marketplace (marketplace-gherghi)
+		- jira
+		- confluence
+	- alerting (maratus)
+	- z تیکت‌هایی که نیاز هست در ادامه فروش با آنها در ارتباط باشند --> routed-to-sales
+- non technical issues 
+	- financial tickets 
+		- transfer balance --> balance-transfer
+		- billing problems 
+		- tickets that we give to user gift code --> discount
+	- information tickets
+		- access issues
+		- rename services
+		- change email 
+		- general question about anything! --> general-question
+- build issues
+	- gitlab runner & jobs 
+	- darkube builder 
+	- dockerfile structure 
+		- docker in docker 
+		- 
+	- ci cd implementation 
+- application layer issus: 
+	- readiness probe 
+	- api-call issues 
+- darkube issues: 
+	- disks issues: 
+		- btrfs issues 
+		- ext4 issues
+		- upload file 
+		- copy file 
+	- migration 
+		- db migration
+		- service migration from other cluster 
+		- changing service repo 
+	- service version update 
+- specifik application issues: 
+	- n8n
+	- elastic
+	- grafana
+	- minio 
+- technical related services issues: 
+	- docker
+	- gitlab
+	- github
+	- hamgit
+	- 
+
+
+
+قوانین لیبل‌گذاری برای تیکت‌های جدید:
+- هر تیکت حداقل یک لیبل و حداکثر ۳ لیبل داشته باشد
+- در صورت نیاز به اضافه شدن تیکت نام‌گذاری به این شکل هست که همه حروف کوچک انگلیسی باشند و بجای فاصله از dash - استفاده شود. 
+-

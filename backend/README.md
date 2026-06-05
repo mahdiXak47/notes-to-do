@@ -27,6 +27,17 @@ docker run --rm -p 8000:8000 \
 
 Persist SQLite and vault data by mounting a volume on **`/app`** (or at least `db.sqlite3` and `media/` / `SAVING_PATH`).
 
+## Mirrors
+
+For faster Docker image pulls, especially in Iran, you can use the following mirror registries:
+
+- **Liara Mirrors**: https://liara.ir/mirrors/
+- **Arash Hatami Mirrors**: https://mirrors.arash-hatami.ir/
+- **Mobin Host Mirrors**: https://mirror.mobinhost.com/
+- **Hamravesh Mirrors**: https://hamravesh.com/blog/container-registry-mirroring-and-caching/
+- **Arvan Mirrors (Docker Images)**: https://www.arvancloud.ir/fa/dev/docker
+- **Arvan Mirrors (Linux Packages)**: https://www.arvancloud.ir/en/dev/linux-repository
+
 ### Initial superuser (optional)
 
 Do **not** commit real passwords. Set at **runtime** (Kubernetes Secret, Darkube env, etc.):

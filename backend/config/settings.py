@@ -21,6 +21,8 @@ ALLOWED_HOSTS = [
     'notes-to-do.darkube.app',
     'notes-to-do.darkube.ir',
     'notestodo.mahdixak.ir',
+    'notestodo.darkube.ir',
+    'notestodo.darkube.app',
 ]
 _extra_hosts = os.environ.get('DJANGO_ALLOWED_HOSTS', '').strip()
 if _extra_hosts:
@@ -31,6 +33,8 @@ CSRF_TRUSTED_ORIGINS = [
     'https://notestodo-core.darkube.app',
     'https://notes-to-do.darkube.app',
     'https://notestodo.mahdixak.ir',
+    'https://notestodo.darkube.ir',
+    'https://notestodo.darkube.app',
 ]
 _extra_csrf = os.environ.get('DJANGO_CSRF_TRUSTED_ORIGINS', '').strip()
 if _extra_csrf:
@@ -45,6 +49,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'corsheaders',
     'rest_framework',
     'rest_framework_simplejwt',
     'accounts',
@@ -53,6 +58,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -102,13 +108,17 @@ _DB_TO_USE = os.environ.get('DB_TO_USE', 'dev').strip().lower()
 _USE_POSTGRES = _DB_TO_USE in ('production', 'postgres', 'prod')
 
 if _USE_POSTGRES:
+    # Production defaults; only DB_PASSWORD must be supplied via environment.
     _pg_env = {
-        'DB_NAME': os.environ.get('DB_NAME'),
-        'DB_USER': os.environ.get('DB_USER'),
+        'DB_NAME': os.environ.get('DB_NAME', 'postgres'),
+        'DB_USER': os.environ.get('DB_USER', 'postgres'),
         'DB_PASSWORD': os.environ.get('DB_PASSWORD'),
-        'DB_HOST': os.environ.get('DB_HOST'),
+        'DB_HOST': os.environ.get('DB_HOST', 'notestodo-db.mahdixak.svc'),
     }
-    _missing_pg = [k for k, v in _pg_env.items() if not (v and str(v).strip())]
+    _missing_pg = [
+        k for k in ('DB_PASSWORD',)
+        if not (_pg_env[k] and str(_pg_env[k]).strip())
+    ]
     if _missing_pg:
         raise ImproperlyConfigured(
             'When DB_TO_USE selects PostgreSQL (production, prod, or postgres), '
@@ -210,4 +220,22 @@ SIMPLE_JWT = {
     'BLACKLIST_AFTER_ROTATION': False,
     'AUTH_HEADER_TYPES': ('Bearer',),
 }
+
+# Browser API calls from the SPA (dev Vite + production hosts).
+CORS_ALLOWED_ORIGINS = [
+    'http://127.0.0.1:5173',
+    'http://localhost:5173',
+    'https://notestodo-core.darkube.app',
+    'https://notes-to-do.darkube.app',
+    'https://notes-to-do.darkube.ir',
+    'https://notestodo.mahdixak.ir',
+    'https://notestodo.darkube.ir',
+    'https://notestodo.darkube.app',
+]
+_extra_cors = os.environ.get('DJANGO_CORS_ALLOWED_ORIGINS', '').strip()
+if _extra_cors:
+    CORS_ALLOWED_ORIGINS.extend(
+        o.strip() for o in _extra_cors.split(',') if o.strip()
+    )
+CORS_ALLOW_CREDENTIALS = True
 
